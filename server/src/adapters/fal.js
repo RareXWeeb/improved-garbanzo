@@ -87,3 +87,4 @@ export async function generateWithFal(payload, apiKey, modelId = 'fal-ai/flux-pu
     modelUsed: modelId,
   };
 }
+

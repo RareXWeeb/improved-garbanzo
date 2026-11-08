@@ -200,3 +200,4 @@ export async function generateSceneImage(
     throw err;
   }
 }
+

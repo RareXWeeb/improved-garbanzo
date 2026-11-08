@@ -24,8 +24,9 @@ import {
   Play,
   Pause,
   Square,
-  Sparkles,
-  Loader2,
+  Menu,
+  X,
+  Layers,
 } from 'lucide-react';
 
 export const DashboardApp: React.FC = () => {
@@ -33,6 +34,7 @@ export const DashboardApp: React.FC = () => {
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
   const [queueProgress, setQueueProgress] = useState<QueueProgressState>(queueCoordinator.getState());
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Modals
   const [showImportModal, setShowImportModal] = useState(false);
@@ -52,7 +54,6 @@ export const DashboardApp: React.FC = () => {
   const { showToast } = useToast();
 
   const currentProjectId = scenes[0]?.projectId || 'proj_default';
-  const projectTitle = scenes[0]?.projectTitle || 'SceneForge';
 
   const refreshScenes = useCallback(async () => {
     try {
@@ -66,7 +67,6 @@ export const DashboardApp: React.FC = () => {
         return all.length > 0 ? all[0].id : null;
       });
 
-      // Load project settings if available
       const project = await db.projects.get(currentProjectId);
       if (project?.defaultSettings) {
         setGenerationSettings(project.defaultSettings);
@@ -98,7 +98,7 @@ export const DashboardApp: React.FC = () => {
 
   const activeScene = scenes.find((s) => s.id === activeSceneId) || null;
 
-  // Keyboard navigation shortcuts: Alt+Down/Right for next scene, Alt+Up/Left for prev, Alt+C to copy
+  // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.altKey || scenes.length === 0) return;
@@ -136,7 +136,7 @@ export const DashboardApp: React.FC = () => {
     e.stopPropagation();
     try {
       await navigator.clipboard.writeText(scene.rawJsonText);
-      showToast(`Prompt JSON for Scene ${scene.scene} copied!`, 'success');
+      showToast(`Prompt for Scene ${scene.scene} copied!`, 'success');
     } catch {
       showToast('Could not copy to clipboard.', 'error');
     }
@@ -147,7 +147,7 @@ export const DashboardApp: React.FC = () => {
     setIsUploadingRefs(true);
     try {
       const count = await ingestMultipleReferences(files);
-      showToast(`Matched ${count} reference image(s)`, 'success');
+      showToast(`Mapped ${count} reference file(s)`, 'success');
       refreshScenes();
     } catch (err) {
       console.error('Failed bulk reference ingest:', err);
@@ -159,7 +159,7 @@ export const DashboardApp: React.FC = () => {
 
   const handleClearAll = async () => {
     if (scenes.length === 0) return;
-    if (window.confirm('Clear all scenes, reference mappings, and generation history from local storage?')) {
+    if (window.confirm('Clear all scenes, references, and generation history?')) {
       await db.scenes.clear();
       await db.generationResults.clear();
       await db.referenceImages.clear();
@@ -183,7 +183,6 @@ export const DashboardApp: React.FC = () => {
     }
   };
 
-  // Queue runner controls
   const handleStartQueue = async () => {
     try {
       await queueCoordinator.startQueue(scenes, generationSettings, currentProjectId);
@@ -219,27 +218,45 @@ export const DashboardApp: React.FC = () => {
     failed: scenes.filter((s) => s.status === 'failed').length,
   };
 
+  const percentComplete =
+    queueProgress.totalScenes > 0
+      ? Math.round((queueProgress.completedScenes / queueProgress.totalScenes) * 100)
+      : 0;
+
   return (
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden">
-      {/* Clean Desktop Navigation Bar */}
-      <header className="flex items-center justify-between px-5 py-2.5 bg-zinc-900 border-b border-zinc-800 shrink-0">
+      {/* Clean Minimalist Header */}
+      <header className="flex items-center justify-between px-3 sm:px-5 py-2.5 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-3">
+          {/* Mobile Sidebar Toggle Button */}
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-1.5 rounded lg:hidden text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            title="Toggle Queue"
+          >
+            {isMobileSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
+
+          {/* Logo Only */}
           <img src="/logo.png" alt="SceneForge" className="h-6 w-auto object-contain shrink-0" />
-          <span className="text-xs font-mono text-zinc-400">
-            {projectTitle} · {counts.approved} of {counts.total} approved
+
+          {/* Discreet Scene Count */}
+          <span className="hidden sm:inline-block text-xs font-mono text-zinc-400">
+            {counts.approved}/{counts.total} approved
           </span>
         </div>
 
-        {/* Global Action Toolbar */}
-        <div className="flex items-center gap-2">
+        {/* Action Toolbar */}
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Character Reference Library */}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setShowCharacterModal(true)}
-            icon={<Users className="w-3.5 h-3.5 text-zinc-300" />}
+            icon={<Users className="w-3.5 h-3.5 text-zinc-400" />}
+            title="Character Library"
           >
-            Character Library
+            <span className="hidden sm:inline">Characters</span>
           </Button>
 
           {/* Provider Settings */}
@@ -247,13 +264,13 @@ export const DashboardApp: React.FC = () => {
             variant="secondary"
             size="sm"
             onClick={() => setShowSettingsModal(true)}
-            icon={<Settings className="w-3.5 h-3.5 text-zinc-300" />}
-            title="Configure AI Provider, Keys & Spending Limits"
+            icon={<Settings className="w-3.5 h-3.5 text-zinc-400" />}
+            title="Provider Settings"
           >
-            Provider ({generationSettings.provider.toUpperCase()})
+            <span className="hidden md:inline">{generationSettings.provider.toUpperCase()}</span>
           </Button>
 
-          {/* Generate All Sequential Runner */}
+          {/* Sequential Queue Runner */}
           {!queueProgress.isRunning ? (
             <Button
               variant="primary"
@@ -261,12 +278,12 @@ export const DashboardApp: React.FC = () => {
               onClick={handleStartQueue}
               disabled={scenes.length === 0}
               icon={<Play className="w-3.5 h-3.5 fill-current" />}
-              title="Generate all eligible scenes sequentially (Concurrency = 1)"
+              title="Generate eligible scenes sequentially"
             >
-              Generate All
+              <span>Generate All</span>
             </Button>
           ) : (
-            <div className="flex items-center gap-1 bg-zinc-800/80 p-0.5 rounded-md border border-zinc-700">
+            <div className="flex items-center gap-1 bg-zinc-800 p-0.5 rounded border border-zinc-700">
               {queueProgress.isPaused ? (
                 <Button
                   variant="primary"
@@ -291,14 +308,14 @@ export const DashboardApp: React.FC = () => {
                 size="sm"
                 onClick={handleStopQueue}
                 icon={<Square className="w-3 h-3 fill-current" />}
-                title="Stop generation queue"
+                title="Stop queue"
               >
                 Stop
               </Button>
             </div>
           )}
 
-          <div className="h-4 w-px bg-zinc-800 mx-1" />
+          <div className="hidden sm:block h-4 w-px bg-zinc-800 mx-0.5" />
 
           {/* Import JSONs */}
           <Button
@@ -306,15 +323,16 @@ export const DashboardApp: React.FC = () => {
             size="sm"
             onClick={() => setShowImportModal(true)}
             icon={<Plus className="w-3.5 h-3.5" />}
+            title="Import Prompts"
           >
-            Import Prompts
+            <span className="hidden sm:inline">Import</span>
           </Button>
 
-          {/* Reference Folder/File Mapping */}
-          <label className="cursor-pointer">
-            <span className="inline-flex items-center justify-center font-medium rounded-md text-xs px-3 py-1.5 gap-1.5 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 border border-zinc-800 transition-colors h-8">
+          {/* Map Location References */}
+          <label className="hidden lg:inline-flex cursor-pointer">
+            <span className="inline-flex items-center justify-center font-medium rounded-md text-xs px-2.5 py-1 gap-1.5 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800 transition-colors h-7">
               <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
-              <span>{isUploadingRefs ? 'Mapping...' : 'Map Location Refs'}</span>
+              <span>{isUploadingRefs ? 'Mapping...' : 'Location Refs'}</span>
             </span>
             <input
               type="file"
@@ -326,23 +344,25 @@ export const DashboardApp: React.FC = () => {
             />
           </label>
 
-          {/* Export Zip */}
+          {/* Export Deliverables */}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setShowExportModal(true)}
             icon={<Archive className="w-3.5 h-3.5" />}
+            title="Export Deliverables"
           >
-            Export Batch
+            <span className="hidden sm:inline">Export</span>
           </Button>
 
-          {/* Optional ChatGPT web fallback */}
+          {/* ChatGPT web fallback */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleOpenChatGPT}
             icon={<ExternalLink className="w-3 h-3 text-zinc-500" />}
-            title="Open ChatGPT website (manual fallback)"
+            title="Open ChatGPT"
+            className="hidden xl:inline-flex"
           >
             ChatGPT
           </Button>
@@ -350,8 +370,8 @@ export const DashboardApp: React.FC = () => {
           {scenes.length > 0 && (
             <button
               onClick={handleClearAll}
-              className="text-zinc-500 hover:text-rose-400 p-1.5 rounded transition-colors ml-1"
-              title="Clear all local data"
+              className="text-zinc-500 hover:text-rose-400 p-1.5 rounded transition-colors"
+              title="Clear all data"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -359,39 +379,50 @@ export const DashboardApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Active Sequential Queue Banner */}
+      {/* Sequential Generation Status Bar */}
       {queueProgress.isRunning && (
-        <div className="bg-gradient-to-r from-orange-950/60 via-zinc-900 to-zinc-900 border-b border-orange-900/40 px-5 py-2 flex items-center justify-between text-xs font-mono">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-orange-400 font-semibold">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>
-                {queueProgress.isPaused ? 'QUEUE PAUSED' : 'SEQUENTIAL GENERATION IN PROGRESS'}
+        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex flex-col gap-1.5 text-xs font-mono">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-zinc-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold">
+                {queueProgress.isPaused ? 'Queue Paused' : 'Generating Batch'}
+              </span>
+              <span className="text-zinc-400 font-sans">
+                {queueProgress.statusMessage}
               </span>
             </div>
-            <span className="text-zinc-300">
-              {queueProgress.statusMessage || 'Processing queue...'}
-            </span>
+
+            <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
+              <span>
+                {queueProgress.completedScenes} / {queueProgress.totalScenes} ({percentComplete}%)
+              </span>
+              {queueProgress.failedScenes > 0 && (
+                <span className="text-rose-400 font-semibold">{queueProgress.failedScenes} failed</span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 text-zinc-400">
-            <span>
-              Scene {queueProgress.completedScenes} of {queueProgress.totalScenes} completed
-            </span>
-            {queueProgress.failedScenes > 0 && (
-              <span className="text-rose-400 font-semibold">({queueProgress.failedScenes} failed)</span>
-            )}
-            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] border border-zinc-700">
-              Concurrency: 1
-            </span>
+          {/* Minimalist Progress Line */}
+          <div className="w-full bg-zinc-800 h-1 rounded-full overflow-hidden">
+            <div
+              className="bg-zinc-200 h-full transition-all duration-300"
+              style={{ width: `${percentComplete}%` }}
+            />
           </div>
         </div>
       )}
 
-      {/* Main Split Layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar: Queue List & Filters (320px) */}
-        <aside className="w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/40 shrink-0">
+      {/* Main Workspace Layout */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Left Sidebar: Queue List & Filters */}
+        <aside
+          className={`
+            fixed inset-y-0 left-0 z-40 w-72 sm:w-80 bg-zinc-900 border-r border-zinc-800 flex flex-col transition-transform duration-200 ease-in-out
+            lg:static lg:translate-x-0 lg:z-auto
+            ${isMobileSidebarOpen ? 'translate-x-0 top-[49px]' : '-translate-x-full lg:translate-x-0'}
+          `}
+        >
           <QueueFilterBar
             filter={filter}
             onChange={setFilter}
@@ -402,18 +433,29 @@ export const DashboardApp: React.FC = () => {
               scenes={scenes}
               activeSceneId={activeSceneId}
               filter={filter}
-              onSelectScene={(s) => setActiveSceneId(s.id)}
+              onSelectScene={(s) => {
+                setActiveSceneId(s.id);
+                setIsMobileSidebarOpen(false); // Close drawer on selection on mobile
+              }}
               onQuickCopy={handleQuickCopy}
             />
           </div>
-          <div className="p-2.5 border-t border-zinc-800 text-[11px] font-mono text-zinc-500 bg-zinc-900/60 flex justify-between items-center">
+          <div className="p-2.5 border-t border-zinc-800 text-[11px] font-mono text-zinc-500 bg-zinc-950 flex justify-between items-center">
             <span>{counts.approved} approved · {counts.regeneration_required} regen</span>
             <span>{counts.total} items</span>
           </div>
         </aside>
 
-        {/* Right Main Pane: Scene Detail & Action HUD */}
-        <main className="flex-1 overflow-y-auto p-6 bg-zinc-950">
+        {/* Mobile Backdrop */}
+        {isMobileSidebarOpen && (
+          <div
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
+          />
+        )}
+
+        {/* Right Main Content Pane */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950">
           <div className="max-w-3xl mx-auto">
             {activeScene ? (
               <SceneDetailHUD
@@ -422,26 +464,27 @@ export const DashboardApp: React.FC = () => {
                 onRefresh={refreshScenes}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
-                  <Sparkles className="w-6 h-6" />
+              /* Serene, Minimalist Empty State */
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 gap-3">
+                <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
+                  <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-zinc-200">
-                    Welcome to SceneForge
-                  </p>
+                  <h3 className="text-sm font-semibold text-zinc-200">
+                    No Scene Selected
+                  </h3>
                   <p className="text-xs text-zinc-500 max-w-sm mt-1">
-                    Upload your character portraits, import your cinematic Image Prompt JSONs, and generate your scenes sequentially.
+                    Upload your character portraits, import your cinematic prompt JSONs, and generate images sequentially.
                   </p>
                 </div>
-                <div className="flex items-center gap-2.5 pt-2">
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setShowCharacterModal(true)}
                     icon={<Users className="w-3.5 h-3.5" />}
                   >
-                    1. Setup Characters
+                    1. Character Library
                   </Button>
                   <Button
                     variant="secondary"
@@ -458,7 +501,7 @@ export const DashboardApp: React.FC = () => {
         </main>
       </div>
 
-      {/* Character Library Modal */}
+      {/* Modals */}
       <CharacterLibraryModal
         isOpen={showCharacterModal}
         onClose={() => setShowCharacterModal(false)}
@@ -466,7 +509,6 @@ export const DashboardApp: React.FC = () => {
         onCharactersUpdated={refreshScenes}
       />
 
-      {/* Provider & Generation Settings Modal */}
       <ProviderSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
@@ -474,14 +516,12 @@ export const DashboardApp: React.FC = () => {
         onSaveSettings={handleSaveSettings}
       />
 
-      {/* Import Modal */}
       <BatchImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImportComplete={refreshScenes}
       />
 
-      {/* Export Modal */}
       <BatchExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}

@@ -58,15 +58,15 @@ export const StatusTransitionBar: React.FC<StatusTransitionBarProps> = ({ scene,
   };
 
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 flex flex-col gap-2.5">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 flex flex-col gap-2.5">
       {/* Status & Quick Transition Controls */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-400">Status:</span>
           <StatusBadge status={scene.status} />
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {/* If Copied or Queued: Offer Mark as Submitted */}
           {(scene.status === 'copied' || scene.status === 'queued') && (
             <Button

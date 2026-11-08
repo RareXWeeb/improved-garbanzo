@@ -101,3 +101,4 @@ describe('promptSynthesizer', () => {
     expect(payload.height).toBe(1280);
   });
 });
+

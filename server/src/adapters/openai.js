@@ -44,3 +44,4 @@ export async function generateWithOpenAI(payload, apiKey) {
     modelUsed: 'openai/dall-e-3',
   };
 }
+

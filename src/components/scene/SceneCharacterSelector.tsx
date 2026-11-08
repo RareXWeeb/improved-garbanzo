@@ -49,11 +49,10 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
     const updatedScene: QueueItem = {
       ...scene,
       selectedCharacterIds: Array.from(updated),
-      characterMismatchAcknowledged: false, // Reset acknowledgment on manual toggle
+      characterMismatchAcknowledged: false,
       updatedAt: Date.now(),
     };
 
-    // Update status to ready or needs_references based on selection
     if (updated.size === 0 && Number(scene.metadata.exact_character_count || 0) > 0) {
       updatedScene.status = 'needs_references';
     } else if (scene.status === 'needs_references' || scene.status === 'queued') {
@@ -89,20 +88,20 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
     };
     await db.scenes.put(updatedScene);
     syncBus.broadcast('STATUS_CHANGED', { sceneId: scene.id });
-    showToast('Character count mismatch acknowledged. Generation unblocked.', 'info');
+    showToast('Character count mismatch acknowledged', 'info');
     onUpdated?.();
   };
 
   const expectedCount = scene.metadata.exact_character_count;
 
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 flex flex-col gap-2.5">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 sm:p-3.5 flex flex-col gap-2.5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5 text-zinc-300" />
+        <div className="flex items-center gap-2">
+          <Users className="w-3.5 h-3.5 text-zinc-400" />
           <span className="text-xs font-semibold text-zinc-200">
-            Assigned Characters
+            Characters in Scene
           </span>
           <span className="text-[11px] font-mono text-zinc-500">
             ({selectedIds.size}{expectedCount !== undefined ? ` / ${expectedCount} required` : ''})
@@ -114,7 +113,7 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
             variant="ghost"
             size="sm"
             onClick={handleAutoDetect}
-            className="text-[11px] h-6 px-1.5 text-zinc-400 hover:text-zinc-200"
+            className="text-[11px] h-6 px-2 text-zinc-400 hover:text-zinc-200"
             icon={<RefreshCw className="w-3 h-3" />}
           >
             Auto-Detect
@@ -124,7 +123,7 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
 
       {/* Mismatch Warning Alert */}
       {validation.warning && (
-        <div className="p-2 rounded bg-amber-950/40 border border-amber-800/40 text-[11px] text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="p-2.5 rounded bg-zinc-950 border border-amber-800/40 text-[11px] text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>{validation.warning}</span>
@@ -133,9 +132,9 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
           {!scene.characterMismatchAcknowledged && (
             <button
               onClick={handleAcknowledgeMismatch}
-              className="text-[10px] font-medium bg-amber-900/60 hover:bg-amber-900 text-amber-100 px-2 py-0.5 rounded border border-amber-700/60 shrink-0 transition-colors"
+              className="text-[10px] font-medium bg-zinc-900 hover:bg-zinc-850 text-amber-200 px-2.5 py-1 rounded border border-amber-800/60 shrink-0 transition-colors self-start sm:self-auto"
             >
-              Acknowledge & Unblock
+              Acknowledge & Proceed
             </button>
           )}
         </div>
@@ -143,8 +142,8 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
 
       {/* Selectable Character Cards */}
       {projectCharacters.length === 0 ? (
-        <div className="text-[11px] text-zinc-500 italic py-2 text-center bg-zinc-950/40 rounded border border-dashed border-zinc-850">
-          No characters registered in library. Open the Character Library to add portraits.
+        <div className="text-[11px] text-zinc-500 py-3 text-center bg-zinc-950 rounded border border-dashed border-zinc-800">
+          No characters in project library yet. Open the Character Library to add portraits.
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -158,20 +157,20 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
                 onClick={() => toggleCharacter(char.id)}
                 className={`flex items-center gap-2 p-1.5 rounded-md border cursor-pointer select-none transition-all ${
                   isSelected
-                    ? 'bg-zinc-800 border-zinc-500 text-white shadow-sm'
-                    : 'bg-zinc-950/50 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                    ? 'bg-zinc-800 border-zinc-300 text-white shadow-sm'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                 }`}
               >
                 {thumb ? (
                   <img
                     src={thumb}
                     alt={char.name}
-                    className={`w-7 h-9 object-cover rounded shrink-0 border ${
+                    className={`w-8 h-10 object-cover rounded shrink-0 border ${
                       isSelected ? 'border-zinc-400' : 'border-zinc-800'
                     }`}
                   />
                 ) : (
-                  <div className="w-7 h-9 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[10px] font-mono text-zinc-500 shrink-0">
+                  <div className="w-8 h-10 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[11px] font-mono text-zinc-400 shrink-0">
                     {char.name.charAt(0)}
                   </div>
                 )}
@@ -179,12 +178,12 @@ export const SceneCharacterSelector: React.FC<SceneCharacterSelectorProps> = ({
                 <div className="flex flex-col min-w-0 flex-1">
                   <span className="text-xs font-semibold truncate leading-tight">{char.name}</span>
                   <span className="text-[10px] text-zinc-500 truncate">
-                    {isSelected ? 'Selected' : 'Click to add'}
+                    {isSelected ? 'Active' : 'Click to add'}
                   </span>
                 </div>
 
                 {isSelected && (
-                  <Check className="w-3.5 h-3.5 text-zinc-200 shrink-0 mr-1" />
+                  <Check className="w-3.5 h-3.5 text-white shrink-0 mr-1" />
                 )}
               </div>
             );

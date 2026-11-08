@@ -286,3 +286,4 @@ app.listen(PORT, () => {
   console.log(`SceneForge Generation Server running on http://localhost:${PORT}`);
   console.log(`Active Provider: ${state.provider} | Model: ${state.modelId}`);
 });
+

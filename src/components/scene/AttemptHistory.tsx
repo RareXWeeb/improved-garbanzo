@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, X } from 'lucide-react';
+import { Eye, X, Check } from 'lucide-react';
 import { GenerationAttempt, QueueItem } from '../../types/queue';
 import { getResultBlobUrl } from '../../services/assetManager';
+import { db } from '../../services/db';
+import { syncBus } from '../../services/sync';
+import { Button } from '../common/Button';
+import { useToast } from '../common/Toast';
 
 interface AttemptHistoryProps {
   scene: QueueItem;
+  onRefresh?: () => void;
 }
 
-export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
+export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene, onRefresh }) => {
   const [selectedAttempt, setSelectedAttempt] = useState<GenerationAttempt | null>(null);
   const [attemptThumbUrls, setAttemptThumbUrls] = useState<Record<string, string>>({});
+  const { showToast } = useToast();
 
   const attempts = scene.attempts || [];
 
@@ -33,6 +39,36 @@ export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
     };
   }, [scene]);
 
+  const handlePromoteAttempt = async (attempt: GenerationAttempt) => {
+    try {
+      const updatedAttempts = attempts.map((a) => {
+        if (a.id === attempt.id) {
+          return { ...a, status: 'approved' as const };
+        }
+        if (a.status === 'approved') {
+          return { ...a, status: 'rejected' as const };
+        }
+        return a;
+      });
+
+      const updatedScene: QueueItem = {
+        ...scene,
+        status: 'approved',
+        attempts: updatedAttempts,
+        updatedAt: Date.now(),
+      };
+
+      await db.scenes.put(updatedScene);
+      syncBus.broadcast('STATUS_CHANGED', { sceneId: scene.id, status: 'approved' });
+      showToast(`v${attempt.attemptNumber} marked as Approved deliverable!`, 'success');
+      setSelectedAttempt(null);
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to promote attempt:', err);
+      showToast('Error updating attempt status', 'error');
+    }
+  };
+
   if (attempts.length === 0) {
     return null;
   }
@@ -54,9 +90,12 @@ export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
           return (
             <div
               key={att.id}
-              className="flex items-center justify-between p-1.5 rounded border border-zinc-800/70 bg-zinc-950/40 text-xs"
+              className="flex items-center justify-between p-1.5 rounded border border-zinc-800/70 bg-zinc-950/40 text-xs hover:border-zinc-700 transition-colors"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
+                onClick={() => setSelectedAttempt(att)}
+              >
                 {thumbUrl ? (
                   <img
                     src={thumbUrl}
@@ -74,6 +113,11 @@ export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
                     <span className="font-mono font-semibold text-zinc-200">
                       v{att.attemptNumber}
                     </span>
+                    {att.provider && (
+                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-zinc-800 text-zinc-400">
+                        {att.provider}
+                      </span>
+                    )}
                     <span className="text-[10px] text-zinc-500 font-mono">
                       {new Date(att.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -102,7 +146,7 @@ export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
                   <button
                     onClick={() => setSelectedAttempt(att)}
                     className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-800"
-                    title="View attempt image"
+                    title="View attempt detail"
                   >
                     <Eye className="w-3.5 h-3.5" />
                   </button>
@@ -113,36 +157,70 @@ export const AttemptHistory: React.FC<AttemptHistoryProps> = ({ scene }) => {
         })}
       </div>
 
-      {/* Inspect modal */}
-      {selectedAttempt && attemptThumbUrls[selectedAttempt.id] && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-3 shadow-xl flex flex-col gap-2.5">
-            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800 text-xs">
-              <span className="font-mono font-medium text-zinc-200">
-                Scene {scene.scene} · Attempt v{selectedAttempt.attemptNumber}
-              </span>
+      {/* Inspect attempt modal */}
+      {selectedAttempt && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-4 shadow-2xl flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-white text-sm">
+                  Scene {scene.scene} · Attempt v{selectedAttempt.attemptNumber}
+                </span>
+                {selectedAttempt.provider && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                    {selectedAttempt.provider}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setSelectedAttempt(null)}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-800"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex justify-center bg-black/50 rounded p-1">
-              <img
-                src={attemptThumbUrls[selectedAttempt.id]}
-                alt="Attempt detail"
-                className="max-h-[60vh] object-contain rounded"
-              />
-            </div>
+            {attemptThumbUrls[selectedAttempt.id] && (
+              <div className="flex justify-center bg-black/60 rounded-lg p-2 border border-zinc-800/80">
+                <img
+                  src={attemptThumbUrls[selectedAttempt.id]}
+                  alt="Attempt detail"
+                  className="max-h-[55vh] object-contain rounded"
+                />
+              </div>
+            )}
+
+            {selectedAttempt.effectivePrompt && (
+              <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800/80 text-xs">
+                <span className="text-zinc-400 font-medium block mb-1">Synthesized Prompt:</span>
+                <p className="text-zinc-300 leading-relaxed max-h-24 overflow-y-auto text-[11px] font-mono">
+                  {selectedAttempt.effectivePrompt}
+                </p>
+              </div>
+            )}
 
             {selectedAttempt.notes && (
-              <div className="p-2 rounded bg-zinc-950 border border-zinc-800 text-xs text-zinc-300">
+              <div className="p-2 rounded-lg bg-zinc-950 border border-zinc-800/80 text-xs text-zinc-300">
                 <span className="text-zinc-500 font-medium">Feedback: </span>
                 {selectedAttempt.notes}
               </div>
             )}
+
+            <div className="flex items-center justify-between pt-1">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedAttempt(null)}>
+                Close
+              </Button>
+              {selectedAttempt.status !== 'approved' && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handlePromoteAttempt(selectedAttempt)}
+                  icon={<Check className="w-3.5 h-3.5" />}
+                >
+                  Approve This Version
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}

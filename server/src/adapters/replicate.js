@@ -85,3 +85,4 @@ export async function generateWithReplicate(payload, apiKey, modelVersion) {
     modelUsed: 'replicate/flux',
   };
 }
+
