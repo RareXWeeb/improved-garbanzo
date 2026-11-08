@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UploadCloud, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { UploadCloud, RotateCcw, Clipboard } from 'lucide-react';
 import { QueueItem } from '../../types/queue';
 import { ingestGenerationResult, getResultBlobUrl } from '../../services/assetManager';
 import { useToast } from '../common/Toast';
@@ -36,6 +36,23 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
     };
   }, [latestAttempt]);
 
+  const ingestBlob = useCallback(
+    async (file: File | Blob, filenameHint?: string) => {
+      setIsProcessing(true);
+      try {
+        const attempt = await ingestGenerationResult(scene.id, file, filenameHint);
+        showToast(`Saved output as Attempt v${attempt.attemptNumber}`, 'success');
+        onResultIngested?.();
+      } catch (err: any) {
+        console.error('Failed to ingest result image:', err);
+        showToast(err.message || 'Error attaching result image.', 'error');
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [scene.id, onResultIngested, showToast]
+  );
+
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const file = files[0];
@@ -45,18 +62,57 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
       return;
     }
 
-    setIsProcessing(true);
-    try {
-      const attempt = await ingestGenerationResult(scene.id, file, file.name);
-      showToast(`Saved output as Attempt v${attempt.attemptNumber}`, 'success');
-      onResultIngested?.();
-    } catch (err: any) {
-      console.error('Failed to ingest result image:', err);
-      showToast(err.message || 'Error attaching result image.', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    await ingestBlob(file, file.name);
   };
+
+  // Paste image directly from clipboard (e.g. Right-click image in ChatGPT -> Copy Image -> Ctrl+V)
+  const handlePasteFromClipboard = useCallback(async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          for (const type of item.types) {
+            if (type.startsWith('image/')) {
+              const blob = await item.getType(type);
+              await ingestBlob(blob, `chatgpt_output_${Date.now()}.png`);
+              return;
+            }
+          }
+        }
+      }
+      showToast('No copied image found in clipboard.', 'info');
+    } catch {
+      showToast('Click here and press Ctrl+V to paste copied image.', 'info');
+    }
+  }, [ingestBlob, showToast]);
+
+  // Window paste listener
+  useEffect(() => {
+    const handleWindowPaste = (e: ClipboardEvent) => {
+      // Don't intercept paste inside textareas or inputs
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            ingestBlob(file, `chatgpt_output_${Date.now()}.png`);
+            return;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, [ingestBlob]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -70,7 +126,7 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files) {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       await handleFiles(e.dataTransfer.files);
     }
   };
@@ -83,11 +139,22 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
           Generated Output
         </span>
 
-        {latestAttempt && (
-          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-850 px-2 py-0.5 rounded border border-zinc-800">
-            Attempt v{latestAttempt.attemptNumber} · {latestAttempt.imageExtension?.toUpperCase()}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {latestAttempt && (
+            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-850 px-2 py-0.5 rounded border border-zinc-800">
+              Attempt v{latestAttempt.attemptNumber} · {latestAttempt.imageExtension?.toUpperCase()}
+            </span>
+          )}
+
+          <button
+            onClick={handlePasteFromClipboard}
+            title="Paste copied image from clipboard (Ctrl+V)"
+            className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 px-2 py-0.5 rounded border border-zinc-800 transition-colors"
+          >
+            <Clipboard className="w-3 h-3" />
+            <span>Paste</span>
+          </button>
+        </div>
       </div>
 
       {previewUrl ? (
@@ -107,20 +174,30 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
             </div>
           </div>
 
-          {/* Quick upload new iteration */}
-          <label className="cursor-pointer w-full max-w-[220px]">
-            <div className="border border-zinc-800 hover:border-zinc-700 rounded-md py-1.5 px-2 text-center bg-zinc-950 hover:bg-zinc-900 transition-colors flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200">
-              <RotateCcw className="w-3 h-3" />
-              <span>Attach new attempt (v{(latestAttempt?.attemptNumber || 0) + 1})</span>
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
-              disabled={isProcessing}
-            />
-          </label>
+          {/* Quick upload / paste new iteration */}
+          <div className="flex items-center gap-2 w-full max-w-[220px]">
+            <label className="cursor-pointer flex-1">
+              <div className="border border-zinc-800 hover:border-zinc-700 rounded-md py-1.5 px-2 text-center bg-zinc-950 hover:bg-zinc-900 transition-colors flex items-center justify-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200">
+                <RotateCcw className="w-3 h-3" />
+                <span>Replace (v{(latestAttempt?.attemptNumber || 0) + 1})</span>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+                disabled={isProcessing}
+              />
+            </label>
+
+            <button
+              onClick={handlePasteFromClipboard}
+              title="Paste new image from clipboard"
+              className="border border-zinc-800 hover:border-zinc-700 rounded-md py-1.5 px-2.5 bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <Clipboard className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       ) : (
         /* Empty dropzone */
@@ -138,10 +215,10 @@ export const ResultDropzone: React.FC<ResultDropzoneProps> = ({ scene, onResultI
             <UploadCloud className={`w-5 h-5 ${isDragging ? 'text-white' : 'text-zinc-500'}`} />
             <div className="flex flex-col gap-0.5">
               <span className="text-xs font-medium text-zinc-300">
-                Drop downloaded ChatGPT image here
+                Drop image here or press Ctrl+V to paste
               </span>
               <span className="text-[10px] text-zinc-500 font-mono">
-                Supports PNG, JPEG, WebP
+                Right-click image in ChatGPT → Copy Image → Ctrl+V
               </span>
             </div>
             <input
