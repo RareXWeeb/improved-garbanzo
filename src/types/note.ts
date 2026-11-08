@@ -20,3 +20,4 @@ export function computeNoteMetadata(content: string): NoteMetadata {
 
   return { charCount, wordCount, lineCount };
 }
+

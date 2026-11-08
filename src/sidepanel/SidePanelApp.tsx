@@ -9,7 +9,10 @@ import {
   Clipboard,
   RotateCcw,
   Edit2,
-  FileText,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import { Note, computeNoteMetadata } from '../types/note';
 import {
@@ -35,9 +38,9 @@ export const SidePanelApp: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSavedBadgeVisible, setIsSavedBadgeVisible] = useState(true);
 
-  // Inline rename state
-  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-  const [tempTitle, setTempTitle] = useState('');
+  // Rename state
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
 
   // Modals state
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -48,7 +51,8 @@ export const SidePanelApp: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const activeNote = notes.find((n) => n.id === activeNoteId) || notes[0];
+  const activeIndex = Math.max(0, notes.findIndex((n) => n.id === activeNoteId));
+  const activeNote = notes[activeIndex] || notes[0];
 
   // Refresh from storage (e.g. when synced from dashboard tab)
   const refreshFromStorage = useCallback(() => {
@@ -63,7 +67,6 @@ export const SidePanelApp: React.FC = () => {
     return () => unsubscribe();
   }, [refreshFromStorage]);
 
-  // Clean up debounce timer on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -73,18 +76,29 @@ export const SidePanelApp: React.FC = () => {
   const handleSelectNote = (id: string) => {
     setActiveNoteId(id);
     saveActiveNoteId(id);
+    setIsRenaming(false);
+  };
+
+  const handlePrevNote = () => {
+    if (notes.length <= 1) return;
+    const prevIndex = (activeIndex - 1 + notes.length) % notes.length;
+    handleSelectNote(notes[prevIndex].id);
+  };
+
+  const handleNextNote = () => {
+    if (notes.length <= 1) return;
+    const nextIndex = (activeIndex + 1) % notes.length;
+    handleSelectNote(notes[nextIndex].id);
   };
 
   const handleContentChange = (newContent: string) => {
     if (!activeNote) return;
 
-    // Immediate local state update for zero lag
     setNotes((prev) =>
       prev.map((n) => (n.id === activeNote.id ? { ...n, content: newContent, updatedAt: Date.now() } : n))
     );
     setIsSavedBadgeVisible(false);
 
-    // Debounced persistence to avoid thrashing disk
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       updateNote(notes, activeNote.id, { content: newContent });
@@ -104,21 +118,23 @@ export const SidePanelApp: React.FC = () => {
     const { newNote, updatedNotes } = createNewNote(notes);
     setNotes(updatedNotes);
     setActiveNoteId(newNote.id);
+    setIsRenaming(false);
     showToast(`Created "${newNote.title}"`, 'success');
   };
 
-  const handleStartRename = (note: Note, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setEditingTitleId(note.id);
-    setTempTitle(note.title);
+  const handleStartRename = () => {
+    if (!activeNote) return;
+    setTitleDraft(activeNote.title);
+    setIsRenaming(true);
   };
 
   const handleSaveRename = () => {
-    if (!editingTitleId) return;
-    const trimmed = tempTitle.trim() || 'Untitled Note';
-    const updated = updateNote(notes, editingTitleId, { title: trimmed });
+    if (!activeNote) return;
+    const trimmed = titleDraft.trim() || 'Untitled Note';
+    const updated = updateNote(notes, activeNote.id, { title: trimmed });
     setNotes(updated);
-    setEditingTitleId(null);
+    setIsRenaming(false);
+    showToast('Prompt title updated', 'info');
   };
 
   const handleCopy = async (textToCopy?: string, noteId?: string) => {
@@ -126,7 +142,7 @@ export const SidePanelApp: React.FC = () => {
     const targetId = noteId ?? activeNote?.id ?? 'main';
 
     if (!text.trim()) {
-      showToast('Note is empty. Nothing to copy.', 'error');
+      showToast('Prompt is empty. Nothing to copy.', 'error');
       return;
     }
 
@@ -157,7 +173,7 @@ export const SidePanelApp: React.FC = () => {
     if (!activeNote) return;
     const updated = updateNote(notes, activeNote.id, { content: '' });
     setNotes(updated);
-    showToast('Cleared note text', 'info');
+    showToast('Cleared prompt text', 'info');
   };
 
   const handleConfirmDelete = () => {
@@ -165,6 +181,7 @@ export const SidePanelApp: React.FC = () => {
     const { updatedNotes, nextActiveId } = deleteNote(notes, deleteTargetNote.id);
     setNotes(updatedNotes);
     setActiveNoteId(nextActiveId);
+    setIsRenaming(false);
     showToast(`Deleted "${deleteTargetNote.title}"`, 'info');
   };
 
@@ -186,23 +203,22 @@ export const SidePanelApp: React.FC = () => {
           <img src="/logo.png" alt="SceneForge" className="h-5 w-auto object-contain shrink-0" />
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-xs tracking-tight text-white">PromptPad</span>
-            <span className="text-[10px] text-zinc-500 font-mono hidden xs:inline">
+            <span className="text-[10px] text-zinc-500 font-mono">
               ({notes.length})
             </span>
           </div>
         </div>
 
-        {/* Header Action Icons */}
+        {/* Action Icons */}
         <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleCreateNote}
-            className="h-7 px-2 text-xs text-zinc-300 hover:text-white gap-1"
-            title="Create New Note"
+            className="h-7 w-7 p-0 text-zinc-300 hover:text-white"
+            title="Create New Prompt"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">New Note</span>
           </Button>
 
           <Button
@@ -227,103 +243,142 @@ export const SidePanelApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Note Tabs Strip */}
-      <nav aria-label="Notes tabs" className="flex items-center gap-1 px-2.5 py-1.5 border-b border-zinc-800/80 bg-zinc-900/60 overflow-x-auto no-scrollbar shrink-0">
-        {notes.map((note) => {
-          const isActive = note.id === activeNoteId;
-          const isCopied = copiedId === note.id;
-
-          return (
-            <div
-              key={note.id}
-              onClick={() => handleSelectNote(note.id)}
-              className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer select-none transition-all border shrink-0 ${
-                isActive
-                  ? 'bg-zinc-800 border-zinc-700 text-white font-medium shadow-sm'
-                  : 'bg-zinc-900/90 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-              }`}
-            >
-              <FileText className="w-3 h-3 text-zinc-500 shrink-0" />
-
-              {editingTitleId === note.id ? (
-                <input
-                  type="text"
-                  value={tempTitle}
-                  onChange={(e) => setTempTitle(e.target.value)}
-                  onBlur={handleSaveRename}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveRename();
-                    if (e.key === 'Escape') setEditingTitleId(null);
-                  }}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-zinc-950 border border-zinc-600 px-1 py-0.5 rounded text-xs text-white outline-none w-28"
-                />
-              ) : (
-                <span
-                  onDoubleClick={(e) => handleStartRename(note, e)}
-                  title="Double-click to rename"
-                  className="truncate max-w-[120px]"
-                >
-                  {note.title}
-                </span>
-              )}
-
-              {/* Quick actions on tab */}
-              {note.content.trim() && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCopy(note.content, note.id);
-                  }}
-                  className="opacity-50 hover:opacity-100 p-0.5 rounded hover:bg-zinc-750 transition-opacity"
-                  title="Copy this note"
-                >
-                  {isCopied ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={(e) => handleStartRename(note, e)}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-zinc-200 transition-opacity"
-                title="Rename note"
-              >
-                <Edit2 className="w-2.5 h-2.5" />
-              </button>
-
-              {notes.length > 1 && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteTargetNote(note);
-                  }}
-                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-rose-400 transition-opacity"
-                  title="Delete note"
-                >
-                  <Trash2 className="w-2.5 h-2.5" />
-                </button>
-              )}
-            </div>
-          );
-        })}
-
+      {/* Row 1: Dropdown Selector with Large Previous & Next Arrow Buttons */}
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900/90 border-b border-zinc-800 shrink-0">
+        {/* Large Previous Button */}
         <button
           type="button"
-          onClick={handleCreateNote}
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors shrink-0"
-          title="Add another note"
+          onClick={handlePrevNote}
+          disabled={notes.length <= 1}
+          className="h-9 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-650 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-200 hover:text-white border border-zinc-700 transition-colors flex items-center justify-center shrink-0 shadow-sm"
+          title="Previous Prompt (<)"
+          aria-label="Previous Prompt"
         >
-          <Plus className="w-3 h-3" />
-          <span>New Note</span>
+          <ChevronLeft className="w-5 h-5" />
         </button>
-      </nav>
+
+        {/* Dropdown Selector */}
+        <div className="relative flex-1 min-w-0">
+          <select
+            value={activeNoteId}
+            onChange={(e) => handleSelectNote(e.target.value)}
+            className="w-full h-9 appearance-none bg-zinc-950 border border-zinc-700 hover:border-zinc-500 focus:border-zinc-400 rounded-lg pl-3 pr-8 text-xs font-semibold text-zinc-100 outline-none cursor-pointer truncate shadow-inner"
+            title="Select Prompt"
+          >
+            {notes.map((note, index) => (
+              <option key={note.id} value={note.id} className="bg-zinc-900 text-zinc-100 py-1 font-sans">
+                {index + 1} of {notes.length} · {note.title}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+
+        {/* Large Next Button */}
+        <button
+          type="button"
+          onClick={handleNextNote}
+          disabled={notes.length <= 1}
+          className="h-9 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-650 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-200 hover:text-white border border-zinc-700 transition-colors flex items-center justify-center shrink-0 shadow-sm"
+          title="Next Prompt (>)"
+          aria-label="Next Prompt"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Inline Title Rename Banner (if renaming active note) */}
+      {isRenaming && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-850 border-b border-zinc-750 shrink-0">
+          <input
+            type="text"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSaveRename();
+              if (e.key === 'Escape') setIsRenaming(false);
+            }}
+            placeholder="Prompt title..."
+            autoFocus
+            className="flex-1 bg-zinc-950 border border-zinc-600 px-2 py-1 rounded text-xs text-white font-medium outline-none"
+          />
+          <Button variant="primary" size="sm" onClick={handleSaveRename} className="h-7 px-2 text-xs">
+            Save
+          </Button>
+          <button
+            type="button"
+            onClick={() => setIsRenaming(false)}
+            className="p-1 rounded text-zinc-400 hover:text-white"
+            title="Cancel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Row 2: Persistent Toolbar Immediately Above the Text Editor */}
+      <div className="flex items-center justify-between px-3 py-2 bg-zinc-900/60 border-b border-zinc-800 shrink-0">
+        {/* Left: Quick Note Controls */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={handleCreateNote}
+            className="h-8 px-2.5 rounded-md bg-zinc-800/80 hover:bg-zinc-750 text-zinc-300 hover:text-white text-xs font-medium border border-zinc-700/60 transition-colors flex items-center gap-1.5"
+            title="Create New Note"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">New</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleStartRename}
+            className="h-8 px-2 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs transition-colors flex items-center gap-1"
+            title="Rename this note"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Rename</span>
+          </button>
+
+          {notes.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setDeleteTargetNote(activeNote)}
+              className="h-8 px-2 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs transition-colors flex items-center gap-1"
+              title="Delete this note"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Right: Large, Prominent Copy Button */}
+        <div className="flex items-center shrink-0">
+          <button
+            type="button"
+            onClick={() => handleCopy()}
+            disabled={!activeNote?.content.trim()}
+            className={`h-8 px-3.5 sm:px-4 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+              copiedId === activeNote?.id
+                ? 'bg-emerald-650 hover:bg-emerald-600 text-white'
+                : 'bg-zinc-100 hover:bg-white text-zinc-950 active:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed'
+            }`}
+            title="Copy entire prompt to clipboard"
+          >
+            {copiedId === activeNote?.id ? (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* Main Text Editor Canvas */}
       <main className="flex-1 flex flex-col min-h-0 bg-zinc-950 p-2 sm:p-3">
@@ -338,10 +393,10 @@ export const SidePanelApp: React.FC = () => {
         />
       </main>
 
-      {/* Bottom Controls / Status Bar */}
+      {/* Bottom Status / Utility Bar */}
       <footer className="border-t border-zinc-800 bg-zinc-900/90 px-3 py-2 flex items-center justify-between gap-2 shrink-0">
         {/* Left: Counters and Autosave Status */}
-        <div className="flex items-center gap-2.5 text-[11px] font-mono text-zinc-400">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400 min-w-0 truncate">
           <span>{metadata.charCount} chars · {metadata.wordCount} words</span>
           <span className="hidden xs:inline text-zinc-600">|</span>
           <span className="hidden xs:flex items-center gap-1 text-zinc-400">
@@ -356,8 +411,8 @@ export const SidePanelApp: React.FC = () => {
           </span>
         </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Right: Paste & Clear Utilities */}
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -366,7 +421,7 @@ export const SidePanelApp: React.FC = () => {
             title="Paste text from clipboard"
           >
             <Clipboard className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Paste</span>
+            <span className="hidden xs:inline">Paste</span>
           </Button>
 
           {activeNote?.content && (
@@ -378,31 +433,9 @@ export const SidePanelApp: React.FC = () => {
               title="Clear this note"
             >
               <RotateCcw className="w-3 h-3" />
-              <span className="hidden sm:inline">Clear</span>
+              <span className="hidden xs:inline">Clear</span>
             </Button>
           )}
-
-          {/* Primary Copy Button */}
-          <Button
-            variant={copiedId === activeNote?.id ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => handleCopy()}
-            disabled={!activeNote?.content.trim()}
-            icon={
-              copiedId === activeNote?.id ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )
-            }
-            className={`h-7 px-3 text-xs font-semibold transition-colors ${
-              copiedId === activeNote?.id
-                ? 'bg-emerald-950 border border-emerald-700 text-emerald-300'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white'
-            }`}
-          >
-            <span>{copiedId === activeNote?.id ? 'Copied!' : 'Copy'}</span>
-          </Button>
         </div>
       </footer>
 

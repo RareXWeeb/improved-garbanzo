@@ -56,3 +56,4 @@ export const ConfirmClearModal: React.FC<ConfirmClearModalProps> = ({
     </div>
   );
 };
+
