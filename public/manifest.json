@@ -9,6 +9,10 @@
     "unlimitedStorage",
     "clipboardWrite"
   ],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*"
+  ],
   "action": {
     "default_title": "SceneForge"
   },

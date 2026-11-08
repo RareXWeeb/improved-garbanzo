@@ -10,6 +10,7 @@ import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
 import { queueCoordinator, QueueProgressState } from '../services/queueCoordinator';
+import { checkServerHealth } from '../services/generationClient';
 import { Button } from '../components/common/Button';
 import { useToast } from '../components/common/Toast';
 import { ingestMultipleReferences } from '../services/assetManager';
@@ -35,6 +36,21 @@ export const DashboardApp: React.FC = () => {
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
   const [queueProgress, setQueueProgress] = useState<QueueProgressState>(queueCoordinator.getState());
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [serverOnline, setServerOnline] = useState<boolean>(true);
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      const h = await checkServerHealth(generationSettings.backendUrl);
+      if (active) setServerOnline(h.status === 'ok');
+    };
+    check();
+    const timer = setInterval(check, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [generationSettings.backendUrl]);
 
   // Modals
   const [showImportModal, setShowImportModal] = useState(false);
@@ -378,6 +394,26 @@ export const DashboardApp: React.FC = () => {
           )}
         </div>
       </header>
+
+      {/* Server Offline Banner for Cloud Providers */}
+      {!serverOnline && generationSettings.provider !== 'dryrun' && (
+        <div className="bg-zinc-900 border-b border-amber-800/40 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-300">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+            <span>
+              Local generation server is offline. Run <code className="bg-zinc-950 px-1.5 py-0.5 rounded font-mono text-white">npm run server</code> in your terminal to use {generationSettings.provider.toUpperCase()}, or test offline with Local Test Engine.
+            </span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleSaveSettings({ ...generationSettings, provider: 'dryrun' })}
+            className="text-[11px] h-6 px-2 text-zinc-200"
+          >
+            Switch to Local Test Engine
+          </Button>
+        </div>
+      )}
 
       {/* Sequential Generation Status Bar */}
       {queueProgress.isRunning && (
