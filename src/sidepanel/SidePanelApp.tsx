@@ -9,10 +9,12 @@ import { BatchImportModal } from '../components/import-export/BatchImportModal';
 import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
+import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
 import { Button } from '../components/common/Button';
 import { useToast } from '../components/common/Toast';
 import {
   Plus,
+  Play,
   Archive,
   Menu,
   ChevronLeft,
@@ -31,6 +33,7 @@ export const SidePanelApp: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showQuickModal, setShowQuickModal] = useState(false);
 
   const [filter, setFilter] = useState<FilterState>({
     searchQuery: '',
@@ -186,6 +189,16 @@ export const SidePanelApp: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setShowQuickModal(true)}
+            className="h-7 w-7 p-0 text-zinc-300 hover:text-white"
+            title="Paste JSON & Generate"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowCharacterModal(true)}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
             title="Character Reference Library"
@@ -285,13 +298,36 @@ export const SidePanelApp: React.FC = () => {
                 <p className="text-[11px] text-zinc-500 max-w-xs">
                   Import prompt files or choose a scene from the queue to start.
                 </p>
-                <div className="flex items-center gap-2 pt-2">
-                  <Button variant="primary" size="sm" onClick={() => setShowImportModal(true)} icon={<Plus className="w-3 h-3" />}>
-                    Import Prompts
+                <div className="flex flex-col items-center gap-2 pt-2 w-full max-w-xs">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowQuickModal(true)}
+                    icon={<Play className="w-3 h-3 fill-current" />}
+                    className="w-full"
+                  >
+                    Paste JSON & Generate
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setShowQueueDrawer(true)} icon={<Menu className="w-3 h-3" />}>
-                    View Queue
-                  </Button>
+                  <div className="flex items-center gap-2 w-full">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowImportModal(true)}
+                      icon={<Plus className="w-3 h-3" />}
+                      className="flex-1"
+                    >
+                      Import Batch
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowQueueDrawer(true)}
+                      icon={<Menu className="w-3 h-3" />}
+                      className="flex-1"
+                    >
+                      Queue
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -300,6 +336,17 @@ export const SidePanelApp: React.FC = () => {
       </main>
 
       {/* Modals */}
+      <QuickGenerateModal
+        isOpen={showQuickModal}
+        onClose={() => setShowQuickModal(false)}
+        generationSettings={generationSettings}
+        projectId={currentProjectId}
+        onSceneCreated={(scene) => {
+          setActiveSceneId(scene.id);
+          refreshScenes();
+        }}
+      />
+
       <CharacterLibraryModal
         isOpen={showCharacterModal}
         onClose={() => setShowCharacterModal(false)}

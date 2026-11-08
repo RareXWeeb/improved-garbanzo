@@ -9,6 +9,7 @@ import { BatchImportModal } from '../components/import-export/BatchImportModal';
 import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
+import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
 import { queueCoordinator, QueueProgressState } from '../services/queueCoordinator';
 import { checkServerHealth } from '../services/generationClient';
 import { Button } from '../components/common/Button';
@@ -57,6 +58,7 @@ export const DashboardApp: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showQuickModal, setShowQuickModal] = useState(false);
   const [isUploadingRefs, setIsUploadingRefs] = useState(false);
 
   const [filter, setFilter] = useState<FilterState>({
@@ -284,6 +286,17 @@ export const DashboardApp: React.FC = () => {
             title="Provider Settings"
           >
             <span className="hidden md:inline">{generationSettings.provider.toUpperCase()}</span>
+          </Button>
+
+          {/* Quick Create / Paste JSON & Generate */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowQuickModal(true)}
+            icon={<Play className="w-3 h-3 fill-current text-zinc-300" />}
+            title="Paste Image Prompt JSON and generate immediately"
+          >
+            <span>Paste & Generate</span>
           </Button>
 
           {/* Sequential Queue Runner */}
@@ -517,10 +530,18 @@ export const DashboardApp: React.FC = () => {
                   <Button
                     variant="primary"
                     size="sm"
+                    onClick={() => setShowQuickModal(true)}
+                    icon={<Play className="w-3.5 h-3.5 fill-current" />}
+                  >
+                    Paste JSON & Generate
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setShowCharacterModal(true)}
                     icon={<Users className="w-3.5 h-3.5" />}
                   >
-                    1. Character Library
+                    Character Library
                   </Button>
                   <Button
                     variant="secondary"
@@ -528,7 +549,7 @@ export const DashboardApp: React.FC = () => {
                     onClick={() => setShowImportModal(true)}
                     icon={<Plus className="w-3.5 h-3.5" />}
                   >
-                    2. Import Prompts
+                    Import Prompts
                   </Button>
                 </div>
               </div>
@@ -538,6 +559,17 @@ export const DashboardApp: React.FC = () => {
       </div>
 
       {/* Modals */}
+      <QuickGenerateModal
+        isOpen={showQuickModal}
+        onClose={() => setShowQuickModal(false)}
+        generationSettings={generationSettings}
+        projectId={currentProjectId}
+        onSceneCreated={(scene) => {
+          setActiveSceneId(scene.id);
+          refreshScenes();
+        }}
+      />
+
       <CharacterLibraryModal
         isOpen={showCharacterModal}
         onClose={() => setShowCharacterModal(false)}
