@@ -5,7 +5,6 @@ import { QueueItem, FilterState, GenerationSettings } from '../types/queue';
 import { QueueFilterBar, QueueCounts } from '../components/queue/QueueFilterBar';
 import { QueueList } from '../components/queue/QueueList';
 import { SceneDetailHUD } from '../components/scene/SceneDetailHUD';
-import { BatchImportModal } from '../components/import-export/BatchImportModal';
 import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
@@ -13,7 +12,6 @@ import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateMo
 import { Button } from '../components/common/Button';
 import { useToast } from '../components/common/Toast';
 import {
-  Plus,
   Play,
   Archive,
   Menu,
@@ -29,7 +27,6 @@ export const SidePanelApp: React.FC = () => {
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -219,16 +216,6 @@ export const SidePanelApp: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowImportModal(true)}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
-            title="Import Prompts"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
             onClick={() => setShowExportModal(true)}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
             title="Export Batch"
@@ -296,7 +283,7 @@ export const SidePanelApp: React.FC = () => {
               <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-2">
                 <p className="text-xs font-medium text-zinc-300">No scene selected</p>
                 <p className="text-[11px] text-zinc-500 max-w-xs">
-                  Import prompt files or choose a scene from the queue to start.
+                  Paste an Image Prompt JSON or choose a scene from the queue.
                 </p>
                 <div className="flex flex-col items-center gap-2 pt-2 w-full max-w-xs">
                   <Button
@@ -308,26 +295,15 @@ export const SidePanelApp: React.FC = () => {
                   >
                     Paste JSON & Generate
                   </Button>
-                  <div className="flex items-center gap-2 w-full">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowImportModal(true)}
-                      icon={<Plus className="w-3 h-3" />}
-                      className="flex-1"
-                    >
-                      Import Batch
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowQueueDrawer(true)}
-                      icon={<Menu className="w-3 h-3" />}
-                      className="flex-1"
-                    >
-                      Queue
-                    </Button>
-                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowQueueDrawer(true)}
+                    icon={<Menu className="w-3 h-3" />}
+                    className="w-full"
+                  >
+                    View Queue ({scenes.length})
+                  </Button>
                 </div>
               </div>
             )}
@@ -341,6 +317,7 @@ export const SidePanelApp: React.FC = () => {
         onClose={() => setShowQuickModal(false)}
         generationSettings={generationSettings}
         projectId={currentProjectId}
+        onOpenCharacterLibrary={() => setShowCharacterModal(true)}
         onSceneCreated={(scene) => {
           setActiveSceneId(scene.id);
           refreshScenes();
@@ -359,12 +336,6 @@ export const SidePanelApp: React.FC = () => {
         onClose={() => setShowSettingsModal(false)}
         settings={generationSettings}
         onSaveSettings={handleSaveSettings}
-      />
-
-      <BatchImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImportComplete={refreshScenes}
       />
 
       <BatchExportModal

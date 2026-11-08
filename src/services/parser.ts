@@ -218,16 +218,32 @@ export function parseImagePromptJson(
   fileNameHint?: string
 ): ParsedScenePrompt[] {
   // Strip UTF-8 Byte Order Mark (BOM) if present (common in Windows text files)
-  const trimmed = rawContent.replace(/^\uFEFF/, '').trim();
+  let trimmed = rawContent.replace(/^\uFEFF/, '').trim();
   if (!trimmed) {
     throw new Error('Input content is empty.');
   }
 
+  // Strip Markdown code block wrappers if copied from ChatGPT (e.g. ```json ... ```)
+  if (trimmed.startsWith('```')) {
+    trimmed = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+
   let parsed: any;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch (err: any) {
-    throw new Error(`JSON Syntax Error: ${err.message || 'Invalid JSON format'}`);
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    // Graceful fallback: user pasted a plain text prompt string
+    parsed = {
+      scene: '01',
+      title: trimmed.slice(0, 40),
+      prompt: trimmed,
+      aspect_ratio: '9:16',
+      resolution: '1080x1920',
+    };
+  } else {
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (err: any) {
+      throw new Error(`JSON Syntax Error: ${err.message || 'Invalid JSON format'}`);
+    }
   }
 
   const results: ParsedScenePrompt[] = [];

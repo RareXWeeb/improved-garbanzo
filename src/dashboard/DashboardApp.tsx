@@ -5,11 +5,11 @@ import { QueueItem, FilterState, GenerationSettings } from '../types/queue';
 import { QueueFilterBar, QueueCounts } from '../components/queue/QueueFilterBar';
 import { QueueList } from '../components/queue/QueueList';
 import { SceneDetailHUD } from '../components/scene/SceneDetailHUD';
-import { BatchImportModal } from '../components/import-export/BatchImportModal';
 import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
 import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
+import { QuickGenerateView } from '../components/quick-generate/QuickGenerateView';
 import { queueCoordinator, QueueProgressState } from '../services/queueCoordinator';
 import { checkServerHealth } from '../services/generationClient';
 import { Button } from '../components/common/Button';
@@ -17,7 +17,6 @@ import { useToast } from '../components/common/Toast';
 import { ingestMultipleReferences } from '../services/assetManager';
 import {
   ExternalLink,
-  Plus,
   Archive,
   FolderOpen,
   Trash2,
@@ -28,7 +27,6 @@ import {
   Square,
   Menu,
   X,
-  Layers,
 } from 'lucide-react';
 
 export const DashboardApp: React.FC = () => {
@@ -54,7 +52,6 @@ export const DashboardApp: React.FC = () => {
   }, [generationSettings.backendUrl]);
 
   // Modals
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -290,13 +287,16 @@ export const DashboardApp: React.FC = () => {
 
           {/* Quick Create / Paste JSON & Generate */}
           <Button
-            variant="secondary"
+            variant={activeSceneId === null ? 'primary' : 'secondary'}
             size="sm"
-            onClick={() => setShowQuickModal(true)}
-            icon={<Play className="w-3 h-3 fill-current text-zinc-300" />}
+            onClick={() => {
+              setActiveSceneId(null);
+              setIsMobileSidebarOpen(false);
+            }}
+            icon={<Play className="w-3 h-3 fill-current" />}
             title="Paste Image Prompt JSON and generate immediately"
           >
-            <span>Paste & Generate</span>
+            <span>Paste JSON & Generate</span>
           </Button>
 
           {/* Sequential Queue Runner */}
@@ -345,17 +345,6 @@ export const DashboardApp: React.FC = () => {
           )}
 
           <div className="hidden sm:block h-4 w-px bg-zinc-800 mx-0.5" />
-
-          {/* Import JSONs */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowImportModal(true)}
-            icon={<Plus className="w-3.5 h-3.5" />}
-            title="Import Prompts"
-          >
-            <span className="hidden sm:inline">Import</span>
-          </Button>
 
           {/* Map Location References */}
           <label className="hidden lg:inline-flex cursor-pointer">
@@ -513,45 +502,18 @@ export const DashboardApp: React.FC = () => {
                 onRefresh={refreshScenes}
               />
             ) : (
-              /* Serene, Minimalist Empty State */
-              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 gap-3">
-                <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-200">
-                    No Scene Selected
-                  </h3>
-                  <p className="text-xs text-zinc-500 max-w-sm mt-1">
-                    Upload your character portraits, import your cinematic prompt JSONs, and generate images sequentially.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowQuickModal(true)}
-                    icon={<Play className="w-3.5 h-3.5 fill-current" />}
-                  >
-                    Paste JSON & Generate
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowCharacterModal(true)}
-                    icon={<Users className="w-3.5 h-3.5" />}
-                  >
-                    Character Library
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowImportModal(true)}
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                  >
-                    Import Prompts
-                  </Button>
-                </div>
+              /* Direct Input Field: Paste JSON & Generate */
+              <div className="py-2">
+                <QuickGenerateView
+                  projectId={currentProjectId}
+                  generationSettings={generationSettings}
+                  onSceneCreated={(scene) => {
+                    setActiveSceneId(scene.id);
+                    refreshScenes();
+                  }}
+                  onOpenCharacterLibrary={() => setShowCharacterModal(true)}
+                  isEmbedded={true}
+                />
               </div>
             )}
           </div>
@@ -564,6 +526,7 @@ export const DashboardApp: React.FC = () => {
         onClose={() => setShowQuickModal(false)}
         generationSettings={generationSettings}
         projectId={currentProjectId}
+        onOpenCharacterLibrary={() => setShowCharacterModal(true)}
         onSceneCreated={(scene) => {
           setActiveSceneId(scene.id);
           refreshScenes();
@@ -582,12 +545,6 @@ export const DashboardApp: React.FC = () => {
         onClose={() => setShowSettingsModal(false)}
         settings={generationSettings}
         onSaveSettings={handleSaveSettings}
-      />
-
-      <BatchImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImportComplete={refreshScenes}
       />
 
       <BatchExportModal

@@ -105,4 +105,20 @@ describe('parser service', () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0].metadata.scene).toBe('68AD');
   });
+
+  it('strips markdown code block wrappers (```json ... ```)', () => {
+    const rawMarkdown = '```json\n{"scene": "68AD", "title": "Markdown Wrap Test"}\n```';
+    const parsed = parseImagePromptJson(rawMarkdown);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].metadata.scene).toBe('68AD');
+    expect(parsed[0].metadata.title).toBe('Markdown Wrap Test');
+  });
+
+  it('gracefully accepts plain text prompt input and generates a 9:16 scene prompt object', () => {
+    const plainText = 'Cinematic vertical portrait shot of Mateo in rain at dawn';
+    const parsed = parseImagePromptJson(plainText);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].metadata.prompt).toBe(plainText);
+    expect(parsed[0].metadata.aspect_ratio).toBe('9:16');
+  });
 });
