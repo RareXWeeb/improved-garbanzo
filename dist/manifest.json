@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "SceneForge Bulk Image Generator",
+  "version": "1.0.0",
+  "description": "Assisted bulk-generation workflow and queue manager for cinematic Image Prompt JSONs.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "unlimitedStorage",
+    "clipboardWrite"
+  ],
+  "action": {
+    "default_title": "Open SceneForge Generator HUD"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
+
