@@ -10,6 +10,8 @@ import { CharacterLibraryModal } from '../components/character/CharacterLibraryM
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
 import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
 import { QuickGenerateView } from '../components/quick-generate/QuickGenerateView';
+import { QuickCopyBox } from '../components/quick-copy/QuickCopyBox';
+import { QuickCopyModal } from '../components/quick-copy/QuickCopyModal';
 import { queueCoordinator, QueueProgressState } from '../services/queueCoordinator';
 import { checkServerHealth } from '../services/generationClient';
 import { Button } from '../components/common/Button';
@@ -27,6 +29,7 @@ import {
   Square,
   Menu,
   X,
+  Copy,
 } from 'lucide-react';
 
 export const DashboardApp: React.FC = () => {
@@ -36,6 +39,7 @@ export const DashboardApp: React.FC = () => {
   const [queueProgress, setQueueProgress] = useState<QueueProgressState>(queueCoordinator.getState());
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean>(true);
+  const [showCopyModal, setShowCopyModal] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -285,6 +289,17 @@ export const DashboardApp: React.FC = () => {
             <span className="hidden md:inline">{generationSettings.provider.toUpperCase()}</span>
           </Button>
 
+          {/* ChatGPT Quick Copy */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowCopyModal(true)}
+            icon={<Copy className="w-3.5 h-3.5 text-zinc-400" />}
+            title="ChatGPT Quick Copy Scratchpad"
+          >
+            <span className="hidden lg:inline">Quick Copy</span>
+          </Button>
+
           {/* Quick Create / Paste JSON & Generate */}
           <Button
             variant={activeSceneId === null ? 'primary' : 'secondary'}
@@ -502,8 +517,8 @@ export const DashboardApp: React.FC = () => {
                 onRefresh={refreshScenes}
               />
             ) : (
-              /* Direct Input Field: Paste JSON & Generate */
-              <div className="py-2">
+              /* Direct Input Field: Paste JSON & Generate + Quick Copy */
+              <div className="py-2 space-y-6">
                 <QuickGenerateView
                   projectId={currentProjectId}
                   generationSettings={generationSettings}
@@ -514,6 +529,18 @@ export const DashboardApp: React.FC = () => {
                   onOpenCharacterLibrary={() => setShowCharacterModal(true)}
                   isEmbedded={true}
                 />
+
+                <div className="pt-2 border-t border-zinc-800/80">
+                  <div className="flex items-center justify-between pb-2 px-1">
+                    <span className="text-xs font-semibold text-zinc-300">
+                      ChatGPT Quick Copy Scratchpad
+                    </span>
+                    <span className="text-[11px] text-zinc-500 font-mono">
+                      Persistent snippets for ChatGPT
+                    </span>
+                  </div>
+                  <QuickCopyBox compact={false} />
+                </div>
               </div>
             )}
           </div>
@@ -551,6 +578,11 @@ export const DashboardApp: React.FC = () => {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         scenes={scenes}
+      />
+
+      <QuickCopyModal
+        isOpen={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
       />
     </div>
   );

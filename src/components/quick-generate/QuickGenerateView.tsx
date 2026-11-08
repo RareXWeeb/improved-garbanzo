@@ -517,3 +517,4 @@ export const QuickGenerateView: React.FC<QuickGenerateViewProps> = ({
     </div>
   );
 };
+

@@ -9,6 +9,8 @@ import { BatchExportModal } from '../components/import-export/BatchExportModal';
 import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
 import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
 import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
+import { QuickCopyBox } from '../components/quick-copy/QuickCopyBox';
+import { QuickCopyModal } from '../components/quick-copy/QuickCopyModal';
 import { Button } from '../components/common/Button';
 import { useToast } from '../components/common/Toast';
 import {
@@ -20,6 +22,7 @@ import {
   Trash2,
   Users,
   Settings,
+  Copy,
 } from 'lucide-react';
 
 export const SidePanelApp: React.FC = () => {
@@ -31,6 +34,7 @@ export const SidePanelApp: React.FC = () => {
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showQuickModal, setShowQuickModal] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
 
   const [filter, setFilter] = useState<FilterState>({
     searchQuery: '',
@@ -196,6 +200,16 @@ export const SidePanelApp: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setShowCopyModal(true)}
+            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
+            title="ChatGPT Quick Copy Scratchpad"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowCharacterModal(true)}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
             title="Character Reference Library"
@@ -280,18 +294,14 @@ export const SidePanelApp: React.FC = () => {
                 onRefresh={refreshScenes}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-2">
-                <p className="text-xs font-medium text-zinc-300">No scene selected</p>
-                <p className="text-[11px] text-zinc-500 max-w-xs">
-                  Paste an Image Prompt JSON or choose a scene from the queue.
-                </p>
-                <div className="flex flex-col items-center gap-2 pt-2 w-full max-w-xs">
+              <div className="flex flex-col h-full gap-3 py-1">
+                <div className="flex flex-col gap-2 shrink-0">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setShowQuickModal(true)}
-                    icon={<Play className="w-3 h-3 fill-current" />}
-                    className="w-full"
+                    icon={<Play className="w-3.5 h-3.5 fill-current" />}
+                    className="w-full justify-center"
                   >
                     Paste JSON & Generate
                   </Button>
@@ -299,11 +309,24 @@ export const SidePanelApp: React.FC = () => {
                     variant="secondary"
                     size="sm"
                     onClick={() => setShowQueueDrawer(true)}
-                    icon={<Menu className="w-3 h-3" />}
-                    className="w-full"
+                    icon={<Menu className="w-3.5 h-3.5" />}
+                    className="w-full justify-center"
                   >
                     View Queue ({scenes.length})
                   </Button>
+                </div>
+
+                {/* ChatGPT Quick Copy Scratchpad */}
+                <div className="flex-1 flex flex-col min-h-0 pt-1">
+                  <div className="flex items-center justify-between pb-1.5 px-0.5 shrink-0">
+                    <span className="text-[11px] font-semibold text-zinc-300">
+                      ChatGPT Quick Copy
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      Persistent Scratchpad
+                    </span>
+                  </div>
+                  <QuickCopyBox compact={false} />
                 </div>
               </div>
             )}
@@ -342,6 +365,11 @@ export const SidePanelApp: React.FC = () => {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         scenes={scenes}
+      />
+
+      <QuickCopyModal
+        isOpen={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
       />
     </div>
   );
