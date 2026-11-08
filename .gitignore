@@ -15,6 +15,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Editor & OS files
+*.zip
 .vscode/
 .idea/
 *.suo
