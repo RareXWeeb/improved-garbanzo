@@ -18,6 +18,7 @@ describe('exporter service', () => {
     const mockScenes: QueueItem[] = [
       {
         id: 'Proj_Ep01_P01_Sc68AD',
+        projectId: 'proj_default',
         projectTitle: 'Proj',
         episode: '01',
         part: '01',
@@ -25,6 +26,7 @@ describe('exporter service', () => {
         title: 'Courtyard Confrontation',
         rawJsonText: '{"scene": "68AD"}',
         metadata: { scene: '68AD', aspect_ratio: '9:16' },
+        selectedCharacterIds: [],
         extractedReferences: [],
         validationIssues: [],
         status: 'approved',
@@ -36,6 +38,9 @@ describe('exporter service', () => {
             attemptNumber: 1,
             timestamp: 1000,
             status: 'rejected',
+            provider: 'fal',
+            effectivePrompt: 'prompt 1',
+            characterIdsUsed: [],
             notes: 'Lighting too soft, needs Cooke bokeh contrast',
           },
           {
@@ -44,6 +49,9 @@ describe('exporter service', () => {
             attemptNumber: 2,
             timestamp: 2000,
             status: 'approved',
+            provider: 'fal',
+            effectivePrompt: 'prompt 2',
+            characterIdsUsed: [],
             imageBlobId: 'blob_2',
             imageExtension: 'png',
           },

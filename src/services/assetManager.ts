@@ -124,6 +124,9 @@ export async function ingestGenerationResult(
     imageBlobId: attemptId,
     imageMimeType: resultAsset.mimeType,
     imageExtension: ext,
+    provider: 'manual_ingest',
+    effectivePrompt: scene.metadata.prompt || scene.rawJsonText,
+    characterIdsUsed: scene.selectedCharacterIds || [],
     notes: userNotes,
     promptSnapshot: scene.rawJsonText,
   };

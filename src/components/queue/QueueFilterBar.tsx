@@ -2,20 +2,26 @@ import React from 'react';
 import { Search } from 'lucide-react';
 import { FilterState, QueueStatus } from '../../types/queue';
 
+export interface QueueCounts {
+  total: number;
+  queued: number;
+  ready?: number;
+  generating?: number;
+  needs_references?: number;
+  copied?: number;
+  submitted?: number;
+  awaiting_review: number;
+  approved: number;
+  regeneration_required: number;
+  failed?: number;
+}
+
 interface QueueFilterBarProps {
   filter: FilterState;
   onChange: (updated: FilterState) => void;
   projects?: string[];
   episodes?: string[];
-  counts: {
-    total: number;
-    queued: number;
-    copied: number;
-    submitted: number;
-    awaiting_review: number;
-    approved: number;
-    regeneration_required: number;
-  };
+  counts: QueueCounts;
 }
 
 export const QueueFilterBar: React.FC<QueueFilterBarProps> = ({
@@ -25,12 +31,14 @@ export const QueueFilterBar: React.FC<QueueFilterBarProps> = ({
 }) => {
   const statuses: Array<{ id: 'all' | QueueStatus; label: string; count: number }> = [
     { id: 'all', label: 'All', count: counts.total },
-    { id: 'queued', label: 'Queued', count: counts.queued },
-    { id: 'copied', label: 'Copied', count: counts.copied },
-    { id: 'submitted', label: 'Submitted', count: counts.submitted },
+    { id: 'ready', label: 'Ready', count: counts.ready || 0 },
+    { id: 'generating', label: 'Active', count: counts.generating || 0 },
     { id: 'awaiting_review', label: 'Review', count: counts.awaiting_review },
     { id: 'approved', label: 'Approved', count: counts.approved },
     { id: 'regeneration_required', label: 'Regen', count: counts.regeneration_required },
+    { id: 'needs_references', label: 'Needs Ref', count: counts.needs_references || 0 },
+    { id: 'failed', label: 'Failed', count: counts.failed || 0 },
+    { id: 'queued', label: 'Queued', count: counts.queued },
   ];
 
   return (
@@ -62,29 +70,31 @@ export const QueueFilterBar: React.FC<QueueFilterBarProps> = ({
 
       {/* Clean Status Filter Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-        {statuses.map((s) => {
-          const isActive = filter.statusFilter === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => onChange({ ...filter, statusFilter: s.id })}
-              className={`shrink-0 flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition-colors ${
-                isActive
-                  ? 'bg-zinc-100 text-zinc-950 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-              }`}
-            >
-              <span>{s.label}</span>
-              <span
-                className={`text-[10px] font-mono ${
-                  isActive ? 'text-zinc-950/70' : 'text-zinc-600'
+        {statuses
+          .filter((s) => s.id === 'all' || s.count > 0 || ['ready', 'awaiting_review', 'approved'].includes(s.id))
+          .map((s) => {
+            const isActive = filter.statusFilter === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onChange({ ...filter, statusFilter: s.id })}
+                className={`shrink-0 flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition-colors ${
+                  isActive
+                    ? 'bg-zinc-100 text-zinc-950 font-semibold'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
                 }`}
               >
-                {s.count}
-              </span>
-            </button>
-          );
-        })}
+                <span>{s.label}</span>
+                <span
+                  className={`text-[10px] font-mono ${
+                    isActive ? 'text-zinc-950/70' : 'text-zinc-600'
+                  }`}
+                >
+                  {s.count}
+                </span>
+              </button>
+            );
+          })}
       </div>
     </div>
   );

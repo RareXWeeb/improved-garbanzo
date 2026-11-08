@@ -5,6 +5,7 @@ import { ParsedScenePrompt } from '../../types/prompt';
 import { QueueItem } from '../../types/queue';
 import { db } from '../../services/db';
 import { syncBus } from '../../services/sync';
+import { getProjectCharacters, autoMatchCharactersForScene, validateCharacterSelection } from '../../services/characterManager';
 import { Button } from '../common/Button';
 import { useToast } from '../common/Toast';
 
@@ -78,12 +79,15 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
     try {
       const newQueueItems: QueueItem[] = [];
+      const projectId = 'proj_default';
+      const projectCharacters = await getProjectCharacters(projectId);
 
       for (const item of parsedPreview) {
         const existing = await db.scenes.get(item.id);
 
-        const queueItem: QueueItem = {
+        let initialQueueItem: QueueItem = {
           id: item.id,
+          projectId,
           projectTitle: item.metadata.project_title || item.metadata.project || 'Project',
           episode: String(item.metadata.episode || '01'),
           part: String(item.metadata.part || '01'),
@@ -91,6 +95,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
           title: item.metadata.title,
           rawJsonText: item.rawJsonText,
           metadata: item.metadata,
+          selectedCharacterIds: existing?.selectedCharacterIds || [],
           extractedReferences: item.extractedReferences,
           validationIssues: item.validationIssues,
           status: existing ? existing.status : 'queued',
@@ -100,8 +105,20 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
           updatedAt: Date.now(),
         };
 
-        await db.scenes.put(queueItem);
-        newQueueItems.push(queueItem);
+        // If newly imported without character assignments, auto-match from project library
+        if (!existing || initialQueueItem.selectedCharacterIds.length === 0) {
+          const autoMatched = autoMatchCharactersForScene(initialQueueItem, projectCharacters);
+          if (autoMatched.length > 0) {
+            initialQueueItem.selectedCharacterIds = autoMatched;
+            const validation = validateCharacterSelection(initialQueueItem);
+            if (validation.isValid) {
+              initialQueueItem.status = 'ready';
+            }
+          }
+        }
+
+        await db.scenes.put(initialQueueItem);
+        newQueueItems.push(initialQueueItem);
       }
 
       syncBus.broadcast('SCENES_BATCH_IMPORTED', { count: newQueueItems.length });

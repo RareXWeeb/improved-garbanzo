@@ -1,170 +1,166 @@
 # SceneForge — Step-by-Step Walkthrough Guide
 
-This walkthrough guides you through installing, configuring, and executing an assisted cinematic batch generation workflow using the **SceneForge Bulk Image Generator** extension in Brave.
+This walkthrough guides you through installing, configuring, and executing an end-to-end AI image-generation workflow using **SceneForge** in Brave Browser.
 
 ---
 
-## Table of Contents
+## Workflow Diagram
 
-1. [Installation & Setup](#1-installation--setup)
-2. [Interface Overview: Side Panel vs. Full Dashboard](#2-interface-overview-side-panel-vs-full-dashboard)
-3. [Step 1: Ingestion & Validation](#step-1-ingestion--validation)
-4. [Step 2: Reference Image Mapping](#step-2-reference-image-mapping)
-5. [Step 3: The Assisted Generation Loop (ChatGPT)](#step-3-the-assisted-generation-loop-chatgpt)
-6. [Step 4: Review, Approval & Regeneration](#step-4-review-approval--regeneration)
-7. [Step 5: Batch Manifest & ZIP Export](#step-5-batch-manifest--zip-export)
-8. [Database Backup & Disaster Recovery](#database-backup--disaster-recovery)
-9. [Keyboard Shortcuts Cheat Sheet](#keyboard-shortcuts-cheat-sheet)
+```text
+┌─────────────────────────┐
+│ 1. Character Library    │──> Upload reference portraits once (e.g. Rafael, Mariel)
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 2. Import Scene JSONs   │──> Parse & validate Image Prompt JSON batch
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 3. Select Characters    │──> Auto-detect or manually map characters to each scene
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 4. "Generate All"       │──> Sequential execution: Concurrency = 1
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 5. Review & Iterate     │──> Inspect 9:16 results, approve, or mark for regeneration
+└───────────┬─────────────┘
+            ▼
+┌─────────────────────────┐
+│ 6. Export Deliverables  │──> Download ZIP with organized images + manifest.json
+└─────────────────────────┘
+```
 
 ---
 
-## 1. Installation & Setup
+## 1. Installation & Server Setup
 
-1. Open **Brave** and navigate to `brave://extensions` (or `chrome://extensions` in Chrome/Edge).
-2. Enable the **Developer mode** toggle in the top-right corner.
-3. Click the **Load unpacked** button.
-4. Browse to and select your build folder:
+### Step 1.1: Start Local Generation Server
+The local generation server securely holds your API credentials, enforces the single-concurrency queue, and communicates with your chosen AI provider.
+
+1. Open PowerShell or a terminal in the project directory:
+   ```powershell
+   cd C:\Projects\SceneForge
+   npm run server
+   ```
+2. You will see:
+   ```text
+   ==================================================
+     SceneForge Generation Server
+     Listening on: http://localhost:3001
+     Active Provider: dryrun
+     Concurrency Limit: 1 (Strictly Sequential)
+   ==================================================
+   ```
+
+### Step 1.2: Load Extension in Brave
+1. Open Brave and navigate to `brave://extensions`.
+2. Enable the **Developer mode** toggle in the top right.
+3. Click **Load unpacked**.
+4. Select the build directory:
    ```text
    C:\Projects\SceneForge\dist
    ```
-5. Click **Select Folder**. The extension **SceneForge Bulk Image Generator** will appear in your extensions list.
-6. Click the extensions puzzle icon on the Brave toolbar and **pin** the SceneForge clapperboard icon for quick access.
+5. Click **Select Folder**. Pin the SceneForge clapperboard icon to your toolbar.
 
 ---
 
-## 2. Interface Overview: Side Panel vs. Full Dashboard
+## 2. Setting Up Your Character Reference Library
 
-The extension provides two synchronized surfaces powered by a shared IndexedDB:
+You only need to upload character reference portraits **once per project**. SceneForge stores them in IndexedDB and reuses them across every scene in your queue.
 
-- **Side Panel HUD (`sidepanel.html`)**:
-  - Docks natively to the right side of your active ChatGPT tab.
-  - Designed for rapid copy-paste, reference checking, and drag-and-drop result ingestion.
-  - Open by clicking the toolbar icon or choosing **Open side panel** from the extension menu.
-- **Full-Tab Dashboard (`dashboard.html`)**:
-  - Full-screen wide view for managing large multi-episode queues, mass reference folder ingestion, and batch auditing.
-  - Open by clicking the **Maximize** button in the Side Panel header, or navigating directly to the dashboard URL.
-
----
-
-## 3. Step 1: Ingestion & Validation
-
-You can import prompts from single `.json` files, multiple files at once, or paste a batch.
-
-### Walkthrough with Sample Prompts:
-1. Open the Side Panel HUD or Dashboard.
-2. Click **Import Prompts** (`+` button).
-3. Choose either:
-   - **Upload JSON Files**: Drag and drop [`sample-prompts.json`](./sample-prompts.json) (or multiple scene `.json` files).
-   - **Paste Batch JSON**: Paste raw JSON object or array.
-4. The parser validates the structure:
-   - Alphanumeric scene identifiers (`68A`, `68AD`, `20B`) are extracted and organized.
-   - Cinematic format requirements (strict 9:16 vertical, 1080×1920, ARRI ALEXA 35, Cooke S4/i) are verified. Non-matching fields are tagged with non-blocking diagnostic notices.
-   - Original prompt JSON text is preserved **100% verbatim**.
-5. Click **Add Scene(s) to Queue**.
+1. Open SceneForge (either in the **Side Panel** or click **Maximize** to open the **Full Dashboard**).
+2. In the top toolbar, click **Character Library** (or **Setup Characters**).
+3. Click **+ Add Character Reference**.
+4. Fill out the character profile:
+   - **Name**: e.g., `Rafael`
+   - **Aliases**: e.g., `Rafael Santos, Raffy, Rafael_Ref.png`
+   - **Description**: e.g., `30s Filipino man, sharp jawline, determined expression`
+   - **Default Wardrobe**: e.g., `Charcoal linen button-up shirt`
+   - **Portrait Reference**: Upload your approved character headshot/portrait image.
+5. Click **Save Character to Library**.
+6. Repeat for any other project characters (e.g., `Mariel`, `Carlos`).
 
 ---
 
-## 4. Step 2: Reference Image Mapping
+## 3. Importing Scene JSONs
 
-Prompts with `reference_images`, `character_references`, or `location_references` automatically populate a visual checklist for each scene.
+SceneForge accepts your cinematic Image Prompt JSONs either as individual files or as a batch.
 
-1. Select a scene in the queue (e.g., `Scene 68AD`).
-2. Notice the **Required Reference Images** checklist:
-   - Example: `Char_Mateo_Portrait.png`, `Char_Elena_Portrait.png`, `Loc_Int_SanAgustin_Courtyard.jpg`.
-   - Items initially show yellow **Unmapped** badges.
-3. Click **Map Files** on the scene checklist (or click **Map Reference Assets** in the Dashboard header to select an entire folder of assets).
-4. Select your local reference images from disk (for immediate testing, you can select the files inside [`sample-references/`](./sample-references/)).
-5. The extension stores the image binaries in IndexedDB and matches them to scenes by filename:
-   - Unmapped badges turn into green **Ready** badges.
-   - High-res thumbnails render next to each character and location name.
-6. **Time-Saving Feature — Direct Clipboard Image Binary Copy**:
-   - Instead of looking up files on disk to upload to ChatGPT, click **Copy Image** on any matched reference badge.
-   - The extension writes the raw PNG binary to your system clipboard.
-   - In ChatGPT, simply press <kbd>Ctrl</kbd>+<kbd>V</kbd> to attach the reference image directly.
+1. In the top toolbar, click **Import Prompts**.
+2. Select one of two methods:
+   - **Upload JSON Files**: Drag and drop your `.json` prompt files.
+   - **Paste Batch JSON**: Paste raw JSON objects or an array of scenes.
+3. The parser validates the structure:
+   - Preserves your raw prompt JSON **100% verbatim**.
+   - Sorts alphanumeric scene numbers (e.g. `68A`, `68AD`, `70`).
+   - Automatically cross-references character names from `characters_visible` and `reference_images` against your Character Library.
+4. Click **Add Scene(s) to Queue**.
 
 ---
 
-## 5. Step 3: The Assisted Generation Loop (ChatGPT)
+## 4. Configuring Provider & Budget
 
-Follow this assisted human-in-the-loop workflow:
-
-```text
-Select Scene ──> Check References ──> Copy Prompt JSON ──> Paste & Run in ChatGPT ──> Drop Result Image
-```
-
-1. Click **Open ChatGPT** in the extension header to launch or focus `chatgpt.com` beside the HUD.
-2. In the HUD, click **Copy Prompt JSON** (or press <kbd>Alt</kbd>+<kbd>C</kbd>).
-   - The verbatim JSON is copied to your clipboard.
-   - The queue item status advances to **Copied**.
-3. In ChatGPT:
-   - Attach the required reference images (using the **Copy Image** button in the checklist and pressing <kbd>Ctrl</kbd>+<kbd>V</kbd> in ChatGPT).
-   - Paste the prompt JSON and press **Send**.
-4. Return to the HUD and click **Mark as Submitted** (advances status to **Submitted**).
-5. Wait for ChatGPT to generate the vertical 9:16 cinematic image.
+1. Click **Provider** in the top navigation bar.
+2. Select your AI generation provider:
+   - **Fal.ai (`fal-ai/flux-pulid`)** *(Recommended)*: High-fidelity character visual consistency conditioned on your uploaded portraits.
+   - **Replicate (`flux-dev-multi-ip-adapter`)**: Flux.1 multi-reference adapter.
+   - **OpenAI (`dall-e-3`)**: Text-only fallback.
+   - **Local Dry-Run Engine**: Free local offline generator that creates actual 9:16 portrait PNGs for pipeline testing.
+3. If using Fal, Replicate, or OpenAI, enter your API key. The key is securely saved to `server/.env`.
+4. Set your **Maximum Batch Spend Limit** (e.g. `$5.00 USD`).
+5. Choose your **Batch Generation Mode**:
+   - **Mode A (Full Sequential)**: Generates one scene after another automatically.
+   - **Mode B (Review Between Scenes)**: Generates one scene and pauses for your inspection.
+6. Click **Test Connection** to confirm the server is Online, then click **Save Settings**.
 
 ---
 
-## 6. Step 4: Review, Approval & Regeneration
+## 5. Generating Images
 
-1. Right-click and save/download the generated image from ChatGPT (or drag it directly from ChatGPT if your browser supports direct dragging).
-2. Drop the downloaded file into the **Generated Result Dropzone** in the extension HUD:
-   - Format (`.png`, `.jpg`, `.webp`) is automatically detected and preserved.
-   - Stored as `Attempt v1` with a timestamp and high-res 9:16 preview.
-   - Queue status advances to **Awaiting Review**.
-3. **If the image matches your vision**:
-   - Click **Approve Scene**.
-   - Status turns green (**Approved**).
-   - Press <kbd>Alt</kbd>+<kbd>↓</kbd> to move immediately to the next scene.
-4. **If the image needs revision**:
-   - Click **Need Regeneration**.
-   - Type revision feedback (e.g., *"Cooke bokeh too shallow, increase rim lighting on Mateo"*).
-   - The current attempt is preserved in **Iteration History** as rejected with your feedback notes.
-   - Status updates to **Regen Needed**.
-   - Adjust prompt or references, copy again, and generate `Attempt v2`. Previous attempts are never overwritten!
+### Option A: Generate a Single Scene
+1. Click any scene in the queue sidebar to view its HUD.
+2. Inspect the **Assigned Character References** card. You can click character chips to toggle or assign portraits.
+3. Click the primary **Generate Scene** button.
+4. SceneForge synthesizes the cinematic ARRI ALEXA 35 / Cooke S4/i prompt, conditions on the character reference portrait(s), and dispatches the request to the backend.
+5. In seconds, the resulting 9:16 portrait image renders directly in the HUD!
 
----
-
-## 7. Step 5: Batch Manifest & ZIP Export
-
-Once you have approved scenes in your batch:
-
-1. Click **Export Batch** in the header.
-2. Select export preferences:
-   - **Export only Approved image results** (default for production delivery).
-   - Or uncheck to archive all historical generation attempts.
-3. Review the export filename preview:
-   ```text
-   [Project]_Ep[XX]_P[YY]_Sc[AlphanumericID]_v[AttemptNum].[ext]
-   ```
-   *Example: `Bayani_Series_Ep01_P02_Sc68AD_v2.png`*
-4. Click **Download Batch ZIP**:
-   - A structured `.zip` archive downloads containing:
-     - Folders grouped by `Project / EpXX_PYY / ...`
-     - All approved high-resolution images preserving their original format extensions.
-     - A root `manifest.json` cataloging all scenes, verbatim prompt snapshots, metadata, attempt histories, and timestamps.
+### Option B: Sequential "Generate All" Batch Runner
+1. In the top header, click **Generate All**.
+2. The sequential queue runner starts:
+   - **Strict Concurrency = 1**: Only one scene generates at a time.
+   - A live progress banner displays the active scene, completed count, and remaining count.
+   - You can click **Pause** at any time to pause after the current scene finishes.
+   - You can click **Resume** to continue or **Stop** to halt the queue.
 
 ---
 
-## 8. Database Backup & Disaster Recovery
+## 6. Reviewing and Iterating
 
-All queue data, notes, and attempts are stored locally in your browser's IndexedDB.
+Each generation creates a versioned attempt (`v1`, `v2`, `v3`) without overwriting previous outputs.
 
-- **Create a Full Backup**:
-  - Open **Export Batch** → click **Full DB Backup**.
-  - Downloads a portable `.json` backup file containing all scene records and attempt logs.
-- **Restore a Backup**:
-  - Open **Export Batch** → click **Restore Backup** and select your `.json` backup file.
-  - Restores all scene states, attempts, and notes instantly across the Side Panel and Dashboard.
+- **Approve Scene**: Click **Approve Scene** to mark it as the final deliverable for export.
+- **Request Revision**: Click **Regen** to enter revision notes (e.g., *"Increase rim light on hair, adjust Cooke bokeh"*). The previous attempt is marked `Rejected` and the scene is flagged for regeneration.
+- **Iteration Timeline**: Click any attempt chip in the **History** timeline to compare outputs side by side.
 
 ---
 
-## 9. Keyboard Shortcuts Cheat Sheet
+## 7. Exporting Deliverables
 
-Use these shortcuts in either the Side Panel HUD or Dashboard:
+1. In the top header, click **Export Batch**.
+2. Review the export summary:
+   - Total approved outputs.
+   - Output filename preview: `[Project]_[Episode]_[Part]_[Scene]_[Attempt].[ext]` (e.g. `Ang_Pagbabalik_Ep01_P01_Sc68AD_v1.png`).
+3. Click **Download ZIP Deliverables**.
+4. SceneForge generates and downloads a clean ZIP archive containing all approved cinematic images and a complete `manifest.json`.
+
+---
+
+## 8. Keyboard Shortcuts
 
 | Shortcut | Action |
 | :--- | :--- |
-| <kbd>Alt</kbd> + <kbd>↓</kbd> / <kbd>Alt</kbd> + <kbd>→</kbd> | Jump to **Next Scene** in queue |
-| <kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>Alt</kbd> + <kbd>←</kbd> | Jump to **Previous Scene** in queue |
-| <kbd>Alt</kbd> + <kbd>C</kbd> | **Copy Verbatim Prompt JSON** of active scene |
-
+| <kbd>Alt</kbd> + <kbd>↓</kbd> / <kbd>Alt</kbd> + <kbd>→</kbd> | Next scene in queue |
+| <kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>Alt</kbd> + <kbd>←</kbd> | Previous scene in queue |
+| <kbd>Alt</kbd> + <kbd>C</kbd> | Copy prompt JSON verbatim |

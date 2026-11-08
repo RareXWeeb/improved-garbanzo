@@ -6,12 +6,14 @@ describe('status lifecycle and decoupling', () => {
     // Initial scene
     const scene: QueueItem = {
       id: 'Proj_Ep01_P01_Sc68AD',
+      projectId: 'proj_default',
       projectTitle: 'Proj',
       episode: '01',
       part: '01',
       scene: '68AD',
       rawJsonText: '{"scene": "68AD"}',
       metadata: {},
+      selectedCharacterIds: [],
       extractedReferences: [],
       validationIssues: [],
       status: 'queued',
@@ -53,6 +55,9 @@ describe('status lifecycle and decoupling', () => {
           attemptNumber: 1,
           timestamp: Date.now(),
           status: 'awaiting_review',
+          provider: 'manual_ingest',
+          effectivePrompt: 'prompt',
+          characterIdsUsed: [],
           imageBlobId: 'blob_1',
           imageExtension: 'png',
         },
@@ -92,6 +97,9 @@ describe('status lifecycle and decoupling', () => {
           attemptNumber: 2,
           timestamp: Date.now(),
           status: 'approved',
+          provider: 'manual_ingest',
+          effectivePrompt: 'prompt',
+          characterIdsUsed: [],
           imageBlobId: 'blob_2',
           imageExtension: 'webp',
         },
@@ -100,7 +108,8 @@ describe('status lifecycle and decoupling', () => {
     };
     expect(approvedScene.status).toBe('approved');
     expect(approvedScene.attempts).toHaveLength(2);
-    expect(approvedScene.attempts[0].status).toBe('rejected');
-    expect(approvedScene.attempts[1].status).toBe('approved');
+    expect(approvedScene.attempts[0].status).toBe('rejected'); // Attempt 1 still recorded as rejected
+    expect(approvedScene.attempts[1].status).toBe('approved'); // Attempt 2 recorded as approved
+    expect(approvedScene.attempts[1].imageExtension).toBe('webp'); // Format preserved!
   });
 });
