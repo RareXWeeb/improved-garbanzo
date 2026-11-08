@@ -162,10 +162,8 @@ export const SidePanelApp: React.FC = () => {
             {showQueueDrawer ? <ChevronLeft className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
 
-          <div className="flex items-baseline gap-1.5 min-w-0">
-            <span className="text-xs font-semibold text-zinc-100 truncate">
-              SceneForge
-            </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/logo.png" alt="SceneForge" className="h-5 w-auto object-contain shrink-0" />
             <span className="text-[11px] font-mono text-zinc-500">
               {counts.approved}/{counts.total}
             </span>

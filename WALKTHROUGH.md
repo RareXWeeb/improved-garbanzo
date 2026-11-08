@@ -1,4 +1,4 @@
-# SceneForge Bulk Image Generator — Step-by-Step Walkthrough Guide
+# SceneForge — Step-by-Step Walkthrough Guide
 
 This walkthrough guides you through installing, configuring, and executing an assisted cinematic batch generation workflow using the **SceneForge Bulk Image Generator** extension in Brave.
 

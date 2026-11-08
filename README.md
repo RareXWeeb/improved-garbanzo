@@ -1,6 +1,5 @@
-# SceneForge Bulk Image Generator
-
-A standalone Chromium Manifest V3 browser extension designed for **Brave** (with secondary support for Chrome and Microsoft Edge) to power an **assisted bulk-generation workflow** for cinematic Image Prompt JSONs through the ChatGPT web interface.
+# SceneForge
+**v1.0.0** — Assisted bulk-generation workflow and queue manager for cinematic Image Prompt JSONs.
 
 ---
 

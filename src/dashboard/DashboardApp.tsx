@@ -161,10 +161,8 @@ export const DashboardApp: React.FC = () => {
     <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden">
       {/* Clean Desktop Navigation Bar */}
       <header className="flex items-center justify-between px-5 py-2.5 bg-zinc-900 border-b border-zinc-800 shrink-0">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-sm font-semibold tracking-tight text-white">
-            SceneForge Generator
-          </h1>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="SceneForge" className="h-6 w-auto object-contain shrink-0" />
           <span className="text-xs font-mono text-zinc-500">
             {projectTitle} · {counts.approved} of {counts.total} approved
           </span>
