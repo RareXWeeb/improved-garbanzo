@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 async function packExtension() {
   const rootDir = path.resolve(__dirname, '..');
   const distDir = path.join(rootDir, 'dist');
-  const outputFile = path.join(rootDir, 'sceneforge-v1.0.0.zip');
+  const outputFile = path.join(rootDir, 'sceneforge-promptpad-v1.0.0.zip');
 
   if (!fs.existsSync(distDir)) {
     console.error('Error: dist directory does not exist. Run "npm run build" first.');
@@ -34,7 +34,7 @@ async function packExtension() {
     }
   }
 
-  console.log('Packaging dist/ into sceneforge-v1.0.0.zip...');
+  console.log('Packaging dist/ into sceneforge-promptpad-v1.0.0.zip...');
   addDirectoryToZip(distDir, zip);
 
   const zipBuffer = await zip.generateAsync({
@@ -45,7 +45,7 @@ async function packExtension() {
 
   fs.writeFileSync(outputFile, zipBuffer);
   const sizeMb = (zipBuffer.length / (1024 * 1024)).toFixed(2);
-  console.log(`Success! Created: sceneforge-v1.0.0.zip (${sizeMb} MB)`);
+  console.log(`Success! Created: sceneforge-promptpad-v1.0.0.zip (${sizeMb} MB)`);
 }
 
 packExtension().catch((err) => {
