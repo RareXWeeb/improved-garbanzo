@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Assisted bulk-generation workflow and queue manager for cinematic Image Prompt JSONs.",
+  "description": "A lightweight, persistent notepad for saving and instantly copying reusable text and AI prompts.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -1,20 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "SceneForge",
+  "name": "SceneForge PromptPad",
   "version": "1.0.0",
-  "description": "Assisted bulk-generation workflow and queue manager for cinematic Image Prompt JSONs.",
+  "description": "A lightweight, persistent notepad for saving and instantly copying reusable text and AI prompts.",
   "permissions": [
     "sidePanel",
     "storage",
     "unlimitedStorage",
-    "clipboardWrite"
-  ],
-  "host_permissions": [
-    "http://localhost:3001/*",
-    "http://127.0.0.1:3001/*"
+    "clipboardWrite",
+    "clipboardRead"
   ],
   "action": {
-    "default_title": "SceneForge"
+    "default_title": "SceneForge PromptPad"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -30,4 +27,3 @@
     "128": "icons/icon128.png"
   }
 }
-

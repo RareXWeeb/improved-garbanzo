@@ -40,3 +40,4 @@ export const QuickCopyModal: React.FC<QuickCopyModalProps> = ({ isOpen, onClose 
     </div>
   );
 };
+

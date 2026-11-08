@@ -1,240 +1,218 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { db, DEFAULT_GENERATION_SETTINGS } from '../services/db';
-import { syncBus, SyncMessage } from '../services/sync';
-import { QueueItem, FilterState, GenerationSettings } from '../types/queue';
-import { QueueFilterBar, QueueCounts } from '../components/queue/QueueFilterBar';
-import { QueueList } from '../components/queue/QueueList';
-import { SceneDetailHUD } from '../components/scene/SceneDetailHUD';
-import { BatchExportModal } from '../components/import-export/BatchExportModal';
-import { CharacterLibraryModal } from '../components/character/CharacterLibraryModal';
-import { ProviderSettingsModal } from '../components/settings/ProviderSettingsModal';
-import { QuickGenerateModal } from '../components/quick-generate/QuickGenerateModal';
-import { QuickCopyBox } from '../components/quick-copy/QuickCopyBox';
-import { QuickCopyModal } from '../components/quick-copy/QuickCopyModal';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Copy,
+  Check,
+  Plus,
+  Trash2,
+  Download,
+  Maximize2,
+  Clipboard,
+  RotateCcw,
+  Edit2,
+  FileText,
+} from 'lucide-react';
+import { Note, computeNoteMetadata } from '../types/note';
+import {
+  loadNotes,
+  loadActiveNoteId,
+  saveActiveNoteId,
+  createNewNote,
+  updateNote,
+  deleteNote,
+  copyTextVerbatim,
+  readTextFromClipboard,
+  subscribeToSync,
+} from '../services/noteManager';
 import { Button } from '../components/common/Button';
 import { useToast } from '../components/common/Toast';
-import {
-  Play,
-  Archive,
-  Menu,
-  ChevronLeft,
-  Maximize2,
-  Trash2,
-  Users,
-  Settings,
-  Copy,
-} from 'lucide-react';
+import { BackupModal } from '../components/promptpad/BackupModal';
+import { ConfirmDeleteModal } from '../components/promptpad/ConfirmDeleteModal';
+import { ConfirmClearModal } from '../components/promptpad/ConfirmClearModal';
 
 export const SidePanelApp: React.FC = () => {
-  const [scenes, setScenes] = useState<QueueItem[]>([]);
-  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
-  const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
-  const [showQueueDrawer, setShowQueueDrawer] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showCharacterModal, setShowCharacterModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showQuickModal, setShowQuickModal] = useState(false);
-  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [notes, setNotes] = useState<Note[]>(() => loadNotes());
+  const [activeNoteId, setActiveNoteId] = useState<string>(() => loadActiveNoteId(notes));
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isSavedBadgeVisible, setIsSavedBadgeVisible] = useState(true);
 
-  const [filter, setFilter] = useState<FilterState>({
-    searchQuery: '',
-    statusFilter: 'all',
-    projectFilter: 'all',
-    episodeFilter: 'all',
-    sortBy: 'scene_asc',
-  });
+  // Inline rename state
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [tempTitle, setTempTitle] = useState('');
+
+  // Modals state
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [deleteTargetNote, setDeleteTargetNote] = useState<Note | null>(null);
+  const [clearTargetNote, setClearTargetNote] = useState<Note | null>(null);
 
   const { showToast } = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const currentProjectId = scenes[0]?.projectId || 'proj_default';
+  const activeNote = notes.find((n) => n.id === activeNoteId) || notes[0];
 
-  const refreshScenes = useCallback(async () => {
-    try {
-      const all = await db.scenes.toArray();
-      setScenes(all);
-
-      setActiveSceneId((prev) => {
-        if (prev && all.some((s) => s.id === prev)) {
-          return prev;
-        }
-        return all.length > 0 ? all[0].id : null;
-      });
-
-      const project = await db.projects.get(currentProjectId);
-      if (project?.defaultSettings) {
-        setGenerationSettings(project.defaultSettings);
-      }
-    } catch (err) {
-      console.error('Failed to load scenes from DB:', err);
-    }
-  }, [currentProjectId]);
+  // Refresh from storage (e.g. when synced from dashboard tab)
+  const refreshFromStorage = useCallback(() => {
+    const updatedList = loadNotes();
+    setNotes(updatedList);
+    const updatedActiveId = loadActiveNoteId(updatedList);
+    setActiveNoteId(updatedActiveId);
+  }, []);
 
   useEffect(() => {
-    refreshScenes();
+    const unsubscribe = subscribeToSync(refreshFromStorage);
+    return () => unsubscribe();
+  }, [refreshFromStorage]);
 
-    const unsubscribe = syncBus.subscribe((_msg: SyncMessage) => {
-      refreshScenes();
-    });
-
+  // Clean up debounce timer on unmount
+  useEffect(() => {
     return () => {
-      unsubscribe();
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [refreshScenes]);
+  }, []);
 
-  const activeScene = scenes.find((s) => s.id === activeSceneId) || null;
+  const handleSelectNote = (id: string) => {
+    setActiveNoteId(id);
+    saveActiveNoteId(id);
+  };
 
-  // Keyboard navigation shortcuts: Alt+Down/Right for next scene, Alt+Up/Left for prev, Alt+C to copy
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.altKey || scenes.length === 0) return;
+  const handleContentChange = (newContent: string) => {
+    if (!activeNote) return;
 
-      const currentIndex = scenes.findIndex((s) => s.id === activeSceneId);
+    // Immediate local state update for zero lag
+    setNotes((prev) =>
+      prev.map((n) => (n.id === activeNote.id ? { ...n, content: newContent, updatedAt: Date.now() } : n))
+    );
+    setIsSavedBadgeVisible(false);
 
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        const nextIndex = (currentIndex + 1) % scenes.length;
-        setActiveSceneId(scenes[nextIndex].id);
-      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const prevIndex = (currentIndex - 1 + scenes.length) % scenes.length;
-        setActiveSceneId(scenes[prevIndex].id);
-      } else if (e.key.toLowerCase() === 'c' && activeScene) {
-        e.preventDefault();
-        navigator.clipboard.writeText(activeScene.rawJsonText);
-        showToast(`Prompt for Scene ${activeScene.scene} copied!`, 'success');
-      }
-    };
+    // Debounced persistence to avoid thrashing disk
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      updateNote(notes, activeNote.id, { content: newContent });
+      setIsSavedBadgeVisible(true);
+    }, 150);
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [scenes, activeSceneId, activeScene, showToast]);
+  const handleBlurTextarea = () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (activeNote) {
+      updateNote(notes, activeNote.id, { content: activeNote.content });
+      setIsSavedBadgeVisible(true);
+    }
+  };
+
+  const handleCreateNote = () => {
+    const { newNote, updatedNotes } = createNewNote(notes);
+    setNotes(updatedNotes);
+    setActiveNoteId(newNote.id);
+    showToast(`Created "${newNote.title}"`, 'success');
+  };
+
+  const handleStartRename = (note: Note, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditingTitleId(note.id);
+    setTempTitle(note.title);
+  };
+
+  const handleSaveRename = () => {
+    if (!editingTitleId) return;
+    const trimmed = tempTitle.trim() || 'Untitled Note';
+    const updated = updateNote(notes, editingTitleId, { title: trimmed });
+    setNotes(updated);
+    setEditingTitleId(null);
+  };
+
+  const handleCopy = async (textToCopy?: string, noteId?: string) => {
+    const text = textToCopy ?? activeNote?.content ?? '';
+    const targetId = noteId ?? activeNote?.id ?? 'main';
+
+    if (!text.trim()) {
+      showToast('Note is empty. Nothing to copy.', 'error');
+      return;
+    }
+
+    const ok = await copyTextVerbatim(text);
+    if (ok) {
+      setCopiedId(targetId);
+      showToast('Copied to clipboard!', 'success');
+      setTimeout(() => {
+        setCopiedId((curr) => (curr === targetId ? null : curr));
+      }, 2000);
+    } else {
+      showToast('Failed to copy to clipboard', 'error');
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    const text = await readTextFromClipboard();
+    if (text) {
+      const merged = activeNote.content ? `${activeNote.content}\n${text}` : text;
+      handleContentChange(merged);
+      showToast('Pasted from clipboard', 'info');
+    } else {
+      showToast('Could not read clipboard. Please paste with Ctrl+V', 'error');
+    }
+  };
+
+  const handleConfirmClear = () => {
+    if (!activeNote) return;
+    const updated = updateNote(notes, activeNote.id, { content: '' });
+    setNotes(updated);
+    showToast('Cleared note text', 'info');
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTargetNote) return;
+    const { updatedNotes, nextActiveId } = deleteNote(notes, deleteTargetNote.id);
+    setNotes(updatedNotes);
+    setActiveNoteId(nextActiveId);
+    showToast(`Deleted "${deleteTargetNote.title}"`, 'info');
+  };
 
   const handleOpenDashboard = () => {
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
-      const url = chrome.runtime.getURL('dashboard.html');
-      chrome.tabs.create({ url });
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
     } else {
       window.open('dashboard.html', '_blank');
     }
   };
 
-  const handleQuickCopy = async (scene: QueueItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(scene.rawJsonText);
-      showToast(`Prompt JSON for Scene ${scene.scene} copied!`, 'success');
-    } catch {
-      showToast('Could not copy to clipboard.', 'error');
-    }
-  };
-
-  const handleClearQueue = async () => {
-    if (scenes.length === 0) return;
-    if (window.confirm('Clear all scenes and generation history?')) {
-      await db.scenes.clear();
-      await db.generationResults.clear();
-      syncBus.broadcast('ALL_SCENES_CLEARED');
-      refreshScenes();
-      showToast('Queue cleared', 'info');
-    }
-  };
-
-  const handleSaveSettings = async (updated: GenerationSettings) => {
-    setGenerationSettings(updated);
-    try {
-      let project = await db.projects.get(currentProjectId);
-      if (project) {
-        project.defaultSettings = updated;
-        project.updatedAt = Date.now();
-        await db.projects.put(project);
-      }
-    } catch (err) {
-      console.error('Failed to update project settings in db:', err);
-    }
-  };
-
-  const counts: QueueCounts = {
-    total: scenes.length,
-    queued: scenes.filter((s) => s.status === 'queued').length,
-    ready: scenes.filter((s) => s.status === 'ready').length,
-    generating: scenes.filter((s) => s.status === 'generating').length,
-    needs_references: scenes.filter((s) => s.status === 'needs_references').length,
-    awaiting_review: scenes.filter((s) => s.status === 'awaiting_review').length,
-    approved: scenes.filter((s) => s.status === 'approved').length,
-    regeneration_required: scenes.filter((s) => s.status === 'regeneration_required').length,
-    failed: scenes.filter((s) => s.status === 'failed').length,
-  };
+  const metadata = computeNoteMetadata(activeNote?.content || '');
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden">
-      {/* Clean Top Header */}
+    <div className="flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden select-none">
+      {/* Top Header */}
       <header className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={() => setShowQueueDrawer(!showQueueDrawer)}
-            className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
-            title={showQueueDrawer ? 'Show Scene Detail' : 'Show Scene Queue'}
-          >
-            {showQueueDrawer ? <ChevronLeft className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <img src="/logo.png" alt="SceneForge" className="h-5 w-auto object-contain shrink-0" />
-            <span className="text-[11px] font-mono text-zinc-400">
-              {counts.approved}/{counts.total}
+          <img src="/logo.png" alt="SceneForge" className="h-5 w-auto object-contain shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-xs tracking-tight text-white">PromptPad</span>
+            <span className="text-[10px] text-zinc-500 font-mono hidden xs:inline">
+              ({notes.length})
             </span>
           </div>
         </div>
 
+        {/* Header Action Icons */}
         <div className="flex items-center gap-1 shrink-0">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowQuickModal(true)}
-            className="h-7 w-7 p-0 text-zinc-300 hover:text-white"
-            title="Paste JSON & Generate"
+            onClick={handleCreateNote}
+            className="h-7 px-2 text-xs text-zinc-300 hover:text-white gap-1"
+            title="Create New Note"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New Note</span>
           </Button>
 
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowCopyModal(true)}
+            onClick={() => setShowBackupModal(true)}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
-            title="ChatGPT Quick Copy Scratchpad"
+            title="Backup & Restore Notes"
           >
-            <Copy className="w-3.5 h-3.5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCharacterModal(true)}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
-            title="Character Reference Library"
-          >
-            <Users className="w-3.5 h-3.5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSettingsModal(true)}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
-            title="AI Provider Settings"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowExportModal(true)}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
-            title="Export Batch"
-          >
-            <Archive className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5" />
           </Button>
 
           <Button
@@ -249,127 +227,208 @@ export const SidePanelApp: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Viewport */}
-      <main className="flex-1 overflow-hidden relative">
-        {showQueueDrawer ? (
-          /* Drawer: Queue List & Filters */
-          <div className="flex flex-col h-full bg-zinc-950">
-            <QueueFilterBar
-              filter={filter}
-              onChange={setFilter}
-              counts={counts}
-            />
-            <div className="flex-1 overflow-y-auto">
-              <QueueList
-                scenes={scenes}
-                activeSceneId={activeSceneId}
-                filter={filter}
-                onSelectScene={(s) => {
-                  setActiveSceneId(s.id);
-                  setShowQueueDrawer(false);
-                }}
-                onQuickCopy={handleQuickCopy}
-              />
-            </div>
-            {scenes.length > 0 && (
-              <div className="p-2 border-t border-zinc-800/80 bg-zinc-900/60 flex justify-between items-center text-[11px] text-zinc-500 px-3 font-mono">
-                <span>{scenes.length} total scenes</span>
-                <button
-                  onClick={handleClearQueue}
-                  className="text-rose-400 hover:text-rose-300 flex items-center gap-1"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Clear</span>
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Working Scene HUD */
-          <div className="h-full overflow-y-auto p-3">
-            {activeScene ? (
-              <SceneDetailHUD
-                scene={activeScene}
-                generationSettings={generationSettings}
-                onRefresh={refreshScenes}
-              />
-            ) : (
-              <div className="flex flex-col h-full gap-3 py-1">
-                <div className="flex flex-col gap-2 shrink-0">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowQuickModal(true)}
-                    icon={<Play className="w-3.5 h-3.5 fill-current" />}
-                    className="w-full justify-center"
-                  >
-                    Paste JSON & Generate
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowQueueDrawer(true)}
-                    icon={<Menu className="w-3.5 h-3.5" />}
-                    className="w-full justify-center"
-                  >
-                    View Queue ({scenes.length})
-                  </Button>
-                </div>
+      {/* Note Tabs Strip */}
+      <nav aria-label="Notes tabs" className="flex items-center gap-1 px-2.5 py-1.5 border-b border-zinc-800/80 bg-zinc-900/60 overflow-x-auto no-scrollbar shrink-0">
+        {notes.map((note) => {
+          const isActive = note.id === activeNoteId;
+          const isCopied = copiedId === note.id;
 
-                {/* ChatGPT Quick Copy Scratchpad */}
-                <div className="flex-1 flex flex-col min-h-0 pt-1">
-                  <div className="flex items-center justify-between pb-1.5 px-0.5 shrink-0">
-                    <span className="text-[11px] font-semibold text-zinc-300">
-                      ChatGPT Quick Copy
-                    </span>
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                      Persistent Scratchpad
-                    </span>
-                  </div>
-                  <QuickCopyBox compact={false} />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          return (
+            <div
+              key={note.id}
+              onClick={() => handleSelectNote(note.id)}
+              className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer select-none transition-all border shrink-0 ${
+                isActive
+                  ? 'bg-zinc-800 border-zinc-700 text-white font-medium shadow-sm'
+                  : 'bg-zinc-900/90 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+              }`}
+            >
+              <FileText className="w-3 h-3 text-zinc-500 shrink-0" />
+
+              {editingTitleId === note.id ? (
+                <input
+                  type="text"
+                  value={tempTitle}
+                  onChange={(e) => setTempTitle(e.target.value)}
+                  onBlur={handleSaveRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveRename();
+                    if (e.key === 'Escape') setEditingTitleId(null);
+                  }}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-zinc-950 border border-zinc-600 px-1 py-0.5 rounded text-xs text-white outline-none w-28"
+                />
+              ) : (
+                <span
+                  onDoubleClick={(e) => handleStartRename(note, e)}
+                  title="Double-click to rename"
+                  className="truncate max-w-[120px]"
+                >
+                  {note.title}
+                </span>
+              )}
+
+              {/* Quick actions on tab */}
+              {note.content.trim() && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopy(note.content, note.id);
+                  }}
+                  className="opacity-50 hover:opacity-100 p-0.5 rounded hover:bg-zinc-750 transition-opacity"
+                  title="Copy this note"
+                >
+                  {isCopied ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={(e) => handleStartRename(note, e)}
+                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-zinc-200 transition-opacity"
+                title="Rename note"
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+              </button>
+
+              {notes.length > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTargetNote(note);
+                  }}
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-rose-400 transition-opacity"
+                  title="Delete note"
+                >
+                  <Trash2 className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={handleCreateNote}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors shrink-0"
+          title="Add another note"
+        >
+          <Plus className="w-3 h-3" />
+          <span>New Note</span>
+        </button>
+      </nav>
+
+      {/* Main Text Editor Canvas */}
+      <main className="flex-1 flex flex-col min-h-0 bg-zinc-950 p-2 sm:p-3">
+        <textarea
+          ref={textareaRef}
+          value={activeNote?.content || ''}
+          onChange={(e) => handleContentChange(e.target.value)}
+          onBlur={handleBlurTextarea}
+          placeholder="Paste or type your ChatGPT prompts, Grok video instructions, master prompts, or JSON here... Saved automatically."
+          spellCheck={false}
+          className="w-full h-full flex-1 bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 sm:p-4 text-xs sm:text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 font-mono leading-relaxed resize-none overflow-y-auto selection:bg-zinc-700 selection:text-white"
+        />
       </main>
 
+      {/* Bottom Controls / Status Bar */}
+      <footer className="border-t border-zinc-800 bg-zinc-900/90 px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+        {/* Left: Counters and Autosave Status */}
+        <div className="flex items-center gap-2.5 text-[11px] font-mono text-zinc-400">
+          <span>{metadata.charCount} chars · {metadata.wordCount} words</span>
+          <span className="hidden xs:inline text-zinc-600">|</span>
+          <span className="hidden xs:flex items-center gap-1 text-zinc-400">
+            {isSavedBadgeVisible ? (
+              <>
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span>Saved</span>
+              </>
+            ) : (
+              <span>Saving...</span>
+            )}
+          </span>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handlePasteClipboard}
+            className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            title="Paste text from clipboard"
+          >
+            <Clipboard className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Paste</span>
+          </Button>
+
+          {activeNote?.content && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setClearTargetNote(activeNote)}
+              className="h-7 px-2 text-xs text-zinc-400 hover:text-rose-400"
+              title="Clear this note"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="hidden sm:inline">Clear</span>
+            </Button>
+          )}
+
+          {/* Primary Copy Button */}
+          <Button
+            variant={copiedId === activeNote?.id ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => handleCopy()}
+            disabled={!activeNote?.content.trim()}
+            icon={
+              copiedId === activeNote?.id ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )
+            }
+            className={`h-7 px-3 text-xs font-semibold transition-colors ${
+              copiedId === activeNote?.id
+                ? 'bg-emerald-950 border border-emerald-700 text-emerald-300'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white'
+            }`}
+          >
+            <span>{copiedId === activeNote?.id ? 'Copied!' : 'Copy'}</span>
+          </Button>
+        </div>
+      </footer>
+
       {/* Modals */}
-      <QuickGenerateModal
-        isOpen={showQuickModal}
-        onClose={() => setShowQuickModal(false)}
-        generationSettings={generationSettings}
-        projectId={currentProjectId}
-        onOpenCharacterLibrary={() => setShowCharacterModal(true)}
-        onSceneCreated={(scene) => {
-          setActiveSceneId(scene.id);
-          refreshScenes();
+      <BackupModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+        notes={notes}
+        onNotesImported={(imported) => {
+          setNotes(imported);
+          if (imported[0]) setActiveNoteId(imported[0].id);
         }}
       />
 
-      <CharacterLibraryModal
-        isOpen={showCharacterModal}
-        onClose={() => setShowCharacterModal(false)}
-        projectId={currentProjectId}
-        onCharactersUpdated={refreshScenes}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetNote}
+        onClose={() => setDeleteTargetNote(null)}
+        onConfirm={handleConfirmDelete}
+        noteTitle={deleteTargetNote?.title || ''}
       />
 
-      <ProviderSettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        settings={generationSettings}
-        onSaveSettings={handleSaveSettings}
-      />
-
-      <BatchExportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        scenes={scenes}
-      />
-
-      <QuickCopyModal
-        isOpen={showCopyModal}
-        onClose={() => setShowCopyModal(false)}
+      <ConfirmClearModal
+        isOpen={!!clearTargetNote}
+        onClose={() => setClearTargetNote(null)}
+        onConfirm={handleConfirmClear}
+        noteTitle={clearTargetNote?.title || ''}
       />
     </div>
   );
